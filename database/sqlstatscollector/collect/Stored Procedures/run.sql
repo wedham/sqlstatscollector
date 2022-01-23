@@ -57,7 +57,9 @@ SET NOCOUNT ON
 		END CATCH
 
 		UPDATE internal.executionlog
-		SET EndTime = SYSDATETIME(), Duration_ms = DATEDIFF_BIG(MILLISECOND, [StartTime], SYSDATETIME()), errornumber = @@ERROR
+		SET EndTime = SYSDATETIME()
+		, Duration_ms =  (CAST(DATEDIFF(S, [StartTime], SYSDATETIME()) AS bigint) * 1000) + (DATEPART(MS, SYSDATETIME())-DATEPART(MS, [StartTime]))
+		, errornumber = @@ERROR
 		WHERE Id = @current_logitem
 
 		UPDATE internal.collectors 

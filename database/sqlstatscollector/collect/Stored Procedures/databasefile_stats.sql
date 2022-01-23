@@ -71,6 +71,18 @@ END
 CLOSE spaceused;
 DEALLOCATE spaceused;
 
+
+WITH io_virtual_file_stats AS(
+SELECT [database_id]
+     , [file_id]
+     , num_of_reads
+	 , num_of_bytes_read
+	 , io_stall_read_ms
+	 , num_of_writes
+	 , num_of_bytes_written
+	 , io_stall_write_ms 
+ 
+FROM sys.dm_io_virtual_file_stats(NULL, NULL))
 INSERT INTO @databasefile_stats ([database_id] ,[file_id] ,[size] ,[free_pages] 
                                 ,[num_of_reads] ,[num_of_bytes_read] ,[io_stall_read_ms] 
 								,[num_of_writes] ,[num_of_bytes_written] ,[io_stall_write_ms])
@@ -86,7 +98,8 @@ SELECT f.[database_id]
 	 , fs.io_stall_write_ms 
 FROM sys.master_files f INNER JOIN @sizeresults s
   ON s.[database_id] = f.[database_id] AND s.[file_id] = f.[file_id]
-  CROSS APPLY sys.dm_io_virtual_file_stats(f.[database_id], f.[file_id]) fs
+INNER JOIN io_virtual_file_stats fs
+  ON f.[database_id] = fs.[database_id] AND f.[file_id] = fs.[file_id] 
 
 INSERT INTO [data].[databasefile_stats]
            ([database_id]

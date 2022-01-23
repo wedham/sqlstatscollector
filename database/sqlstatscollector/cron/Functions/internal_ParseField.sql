@@ -1,8 +1,4 @@
 ﻿
-
-
-
-
 /*******************************************************************************
 --Copyright (c) 2022 Mikael Wedham (MIT License)
    -----------------------------------------
@@ -33,7 +29,25 @@ AS
 BEGIN
  --Unsorted list of parts in one segment
  DECLARE @parts TABLE (segment varchar(255))
- INSERT INTO @parts SELECT value FROM STRING_SPLIT(@cron, ',');
+
+ DECLARE @writablecron varchar(255) = @cron
+ DECLARE @part varchar(255) 
+ DECLARE @pos int
+
+ WHILE CHARINDEX(',', @writablecron) > 0
+ BEGIN
+
+  SELECT @pos = CHARINDEX(',', @writablecron)
+  SELECT @part = SUBSTRING(@writablecron, 1, @pos - 1)
+  
+  INSERT INTO @parts 
+  SELECT @part
+
+  SELECT @writablecron = SUBSTRING(@writablecron, @pos+1, LEN(@writablecron)-@pos)
+
+ END
+ INSERT INTO @parts 
+ SELECT @writablecron
 
  --Return a distinct list of numbers that match the aggregated cron segment
  INSERT INTO @result(numbers) 

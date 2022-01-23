@@ -49,11 +49,13 @@ BEGIN
 	DECLARE @to int 
 
 	DECLARE @splitter int
+	DECLARE @splitter2 int
 	--Find the position of the '-' separator
 	SELECT @splitter = CHARINDEX('-', @cron)
+	SELECT @splitter2 = CHARINDEX('-', @cron, @splitter + 1)
 
 	--If separator is duplicated or missing, this is not a correct cron part : exit.
-	IF ( SELECT COUNT(*) FROM STRING_SPLIT(@cron, '-')) <> 2 OR (@splitter = 0)
+	IF (@splitter = 0) OR (@splitter2 > 0)
 	BEGIN
 	   RETURN
 	END
