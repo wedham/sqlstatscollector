@@ -13,6 +13,9 @@
     [FilestreamConfiguredLevel]   INT              NULL,
     [IsHadrEnabled]               INT              NULL,
     [LastUpdated]                 DATETIME2 (7)    NOT NULL,
+    [LastHandled]                 DATETIME2 (7)    NULL,
     CONSTRAINT [PK_server_properties] PRIMARY KEY CLUSTERED ([serverid] ASC)
 );
+
+
 

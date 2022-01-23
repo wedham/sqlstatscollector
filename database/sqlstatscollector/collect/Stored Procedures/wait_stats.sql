@@ -1,6 +1,22 @@
-﻿CREATE   PROCEDURE [collect].[wait_stats]
+﻿/*******************************************************************************
+--Copyright (c) 2022 Mikael Wedham (MIT License)
+   -----------------------------------------
+   [collect].[wait_stats]
+   -----------------------------------------
+   Collecting wait_stats for SQL Server.
+   Waits are calculated based on collection interval.
+   If collection is run every 5 minutes, data is prtitioned for every
+   5 minute interval. Numbers are aggregatable.
+
+Date		Name				Description
+----------	-------------		-----------------------------------------------
+2022-01-21	Mikael Wedham		+Created v1
+*******************************************************************************/
+CREATE   PROCEDURE [collect].[wait_stats]
 AS
 BEGIN
+PRINT('[collect].[wait_stats] - Collecting wait_stats for SQL Server')
+SET NOCOUNT ON
 
 DECLARE @wait_stats TABLE ([wait_type] nvarchar(60) NOT NULL
                           ,[wait_time_seconds] decimal(19,3) NOT NULL

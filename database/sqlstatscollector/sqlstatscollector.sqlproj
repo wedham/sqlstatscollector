@@ -102,6 +102,10 @@
     <Build Include="collect\Stored Procedures\database_properties.sql" />
     <Build Include="collect\Stored Procedures\cpu_stats.sql" />
     <Build Include="collect\Stored Procedures\a_template.sql" />
+    <Build Include="internal\Tables\databasefile_stats.sql" />
+    <Build Include="data\Tables\databasefile_stats.sql" />
+    <Build Include="data\Tables\databasefile_properties.sql" />
+    <Build Include="data\Tables\cpu_stats.sql" />
   </ItemGroup>
   <ItemGroup>
     <ArtifactReference Include="$(DacPacRootPath)\Extensions\Microsoft\SQLDB\Extensions\SqlServer\130\SqlSchemas\master.dacpac">
