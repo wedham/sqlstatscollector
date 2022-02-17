@@ -94,19 +94,19 @@ SELECT [database_id]
 FROM sys.databases d LEFT OUTER JOIN @dbccresults dbccresults ON dbccresults.[database_name] = d.[name] 
 CROSS APPLY ( /* Find the last backup of type 'Full' */
       SELECT LastFullBackupTime = MAX(bus.backup_finish_date) 
-      FROM msdb.dbo.backupset bus
+      FROM dbo.backupset bus
       WHERE bus.type = 'D'
 	  AND bus.[database_name] = d.name
       ) fullbackup
 CROSS APPLY ( /* Find the last backup of type 'Differential' */
       SELECT LastDiffBackupTime = MAX(bus.backup_finish_date) 
-      FROM msdb.dbo.backupset bus
+      FROM dbo.backupset bus
       WHERE bus.type = 'I'
 	  AND bus.[database_name] = d.name
       ) diffbackup
 CROSS APPLY ( /* Find the last backup of type 'Log' */
       SELECT LastLogBackupTime = MAX(bus.backup_finish_date) 
-      FROM msdb.dbo.backupset bus
+      FROM dbo.backupset bus
       WHERE bus.type = 'L'
 	  AND bus.[database_name] = d.name
       ) logbackup
