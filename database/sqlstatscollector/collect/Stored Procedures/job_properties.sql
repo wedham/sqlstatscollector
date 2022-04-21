@@ -7,21 +7,35 @@
 
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
-2022-01-21	Mikael Wedham		+Created v1
+2022-04-21	Mikael Wedham		+Created v1
 *******************************************************************************/
 CREATE PROCEDURE [collect].[job_properties]
 AS
 BEGIN
 PRINT('[collect].[job_properties] - Get all defined jobs in the server')
 SET NOCOUNT ON
-
--- Get SQL Server Agent jobs and Category information (Query 9) (SQL Server Agent Jobs)
-SELECT sj.name AS [Job Name], sj.[description] AS [Job Description], 
-sc.name AS [CategoryName], SUSER_SNAME(sj.owner_sid) AS [Job Owner],
-sj.date_created AS [Date Created], sj.[enabled] AS [Job Enabled], 
-sj.notify_email_operator_id, sj.notify_level_email, h.run_status,
-RIGHT(STUFF(STUFF(REPLACE(STR(h.run_duration, 7, 0), ' ', '0'), 4, 0, ':'), 7, 0, ':'),8) AS [Last Duration - HHMMSS],
-CONVERT(DATETIME, RTRIM(h.run_date) + ' ' + STUFF(STUFF(REPLACE(STR(RTRIM(h.run_time),6,0),' ','0'),3,0,':'),6,0,':')) AS [Last Start Date]
+;
+MERGE [data].[job_properties] dest
+USING (
+SELECT job_id = sj.job_id
+     , job_name = sj.[name]
+	 , [description] = sj.[description] 
+	 , job_category = sc.[name]
+	 , job_owner = ISNULL(SUSER_SNAME(sj.owner_sid), CAST(sj.owner_sid as nvarchar(255)))
+	 , [enabled] = sj.[enabled]
+	 , notify_email_desc = CASE WHEN notify_email_operator_id = 0 OR notify_level_email = 0 THEN 'NONE'
+							WHEN notify_level_email = 1 THEN 'SUCCESS'
+							WHEN notify_level_email = 2 THEN 'FAILURE'
+							WHEN notify_level_email = 3 THEN 'COMPLETION'
+							END
+	 , run_status_desc = CASE h.run_status WHEN 0 THEN 'FAILED'
+										   WHEN 1 THEN 'SUCCEEDED'
+										   WHEN 2 THEN 'RETRY'
+										   WHEN 3 THEN 'CANCELLED'
+										   WHEN 4 THEN 'IN PROGRESS'
+										   END
+	 , last_duration = h.run_duration
+	 , last_startdate = CONVERT(DATETIME, RTRIM(h.run_date) + ' ' + STUFF(STUFF(REPLACE(STR(RTRIM(h.run_time),6,0),' ','0'),3,0,':'),6,0,':'))
 FROM msdb.dbo.sysjobs AS sj WITH (NOLOCK)
 INNER JOIN
     (SELECT job_id, instance_id = MAX(instance_id)
@@ -33,21 +47,48 @@ ON sj.category_id = sc.category_id
 INNER JOIN msdb.dbo.sysjobhistory AS h WITH (NOLOCK)
 ON h.job_id = l.job_id
 AND h.instance_id = l.instance_id
-ORDER BY CONVERT(INT, h.run_duration) DESC, [Last Start Date] DESC OPTION (RECOMPILE);
-------
+) src
+ON src.job_id = dest.job_id
+WHEN NOT MATCHED THEN
+INSERT     ([job_id]
+           ,[job_name]
+           ,[description]
+           ,[job_category]
+           ,[job_owner]
+           ,[enabled]
+           ,[notify_email_desc]
+           ,[run_status_desc]
+           ,[last_duration]
+           ,[last_startdate]
+		   ,[run_duration_avg]
+           ,[LastUpdated])
+     VALUES
+           (src.[job_id]
+           ,src.[job_name]
+           ,src.[description]
+           ,src.[job_category]
+           ,src.[job_owner]
+           ,src.[enabled]
+           ,src.[notify_email_desc]
+           ,src.[run_status_desc]
+           ,src.[last_duration]
+           ,src.[last_startdate]
+		   ,0.0
+           ,SYSUTCDATETIME() )
 
---run_status	
--- Value   Status of the job execution
--- 0 =     Failed
--- 1 =     Succeeded
--- 2 =     Retry
--- 3 =     Canceled
--- 4 =     In Progress
-
--- Gives you some basic information about your SQL Server Agent jobs, who owns them and how they are configured
--- Look for Agent jobs that are not owned by sa
--- Look for jobs that have a notify_email_operator_id set to 0 (meaning no operator)
--- Look for jobs that have a notify_level_email set to 0 (meaning no e-mail is ever sent)
+WHEN MATCHED THEN
+UPDATE 
+   SET [job_name] = src.[job_name]
+      ,[description] = src.[description]
+      ,[job_category] = src.[job_category]
+      ,[job_owner] = src.[job_owner]
+      ,[enabled] = src.[enabled]
+      ,[notify_email_desc] = src.[notify_email_desc]
+      ,[run_status_desc] = src.[run_status_desc]
+      ,[last_duration] = src.[last_duration]
+      ,[last_startdate] = src.[last_startdate]
+      ,[LastUpdated] = SYSUTCDATETIME() 
+;
 
 
 END

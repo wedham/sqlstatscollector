@@ -74,6 +74,8 @@
     <Folder Include="Security\" />
     <Folder Include="dbo\" />
     <Folder Include="dbo\Synonyms\" />
+    <Folder Include="transfer\" />
+    <Folder Include="transfer\Stored Procedures\" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="internal\Tables\collectors.sql" />
@@ -114,6 +116,18 @@
     <Build Include="dbo\Synonyms\backupset.sql" />
     <Build Include="collect\Stored Procedures\memory_stats.sql" />
     <Build Include="Security\validate.sql" />
+    <Build Include="data\Tables\job_properties.sql" />
+    <Build Include="internal\Tables\server_stats.sql" />
+    <Build Include="data\Tables\server_stats.sql" />
+    <Build Include="transfer\Stored Procedures\wait_stats.sql" />
+    <Build Include="transfer\Stored Procedures\server_stats.sql" />
+    <Build Include="transfer\Stored Procedures\server_properties.sql" />
+    <Build Include="transfer\Stored Procedures\job_properties.sql" />
+    <Build Include="transfer\Stored Procedures\databasefile_stats.sql" />
+    <Build Include="transfer\Stored Procedures\databasefile_properties.sql" />
+    <Build Include="transfer\Stored Procedures\database_properties.sql" />
+    <Build Include="transfer\Stored Procedures\cpu_stats.sql" />
+    <Build Include="Security\transfer.sql" />
   </ItemGroup>
   <ItemGroup>
     <ArtifactReference Include="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\SQLDB\Extensions\SqlServer\130\SqlSchemas\master.dacpac">

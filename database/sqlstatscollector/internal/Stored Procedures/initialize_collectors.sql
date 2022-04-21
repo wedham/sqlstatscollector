@@ -22,7 +22,9 @@ BEGIN
 	   UNION ALL
 	   SELECT 'agent', 'job_properties', '0 * * * *' --Current jobs collected every hour
 	   UNION ALL
-	   SELECT 'agent', 'job_stats', '*/15 * * * *' --job durations collected every 15 minutes
+	   SELECT 'agent', 'job_stats', '0 */3 * * *' --job durations collected every 3 hours
+	   UNION ALL
+	   SELECT 'core', 'memory_stats', '*/15 * * * *' --memory statistics collected every 15 minutes
 	)
 	MERGE [internal].[collectors] dest
 	USING (SELECT section, collector, cron FROM builtin_collector_list) src
