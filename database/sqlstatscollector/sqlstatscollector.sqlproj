@@ -128,6 +128,7 @@
     <Build Include="transfer\Stored Procedures\database_properties.sql" />
     <Build Include="transfer\Stored Procedures\cpu_stats.sql" />
     <Build Include="Security\transfer.sql" />
+    <Build Include="data\Tables\memory_stats.sql" />
   </ItemGroup>
   <ItemGroup>
     <ArtifactReference Include="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\SQLDB\Extensions\SqlServer\130\SqlSchemas\master.dacpac">

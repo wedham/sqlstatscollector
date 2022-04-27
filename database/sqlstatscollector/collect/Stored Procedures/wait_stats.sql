@@ -48,13 +48,14 @@ DECLARE @wait_stats TABLE ([wait_type] nvarchar(60) NOT NULL
 		)
     AND [waiting_tasks_count] > 0
 
-	INSERT INTO [data].[wait_stats] ([rowtime] ,[wait_type], [wait_time_seconds], [resource_wait_time_seconds], [signal_wait_time_seconds], [wait_count])
+	INSERT INTO [data].[wait_stats] ([rowtime] ,[wait_type], [wait_time_seconds], [resource_wait_time_seconds], [signal_wait_time_seconds], [wait_count], [LastUpdated])
 	SELECT [rowtime] = SYSUTCDATETIME()
 	, [wait_type] = w.[wait_type]
 	, [wait_time_seconds] = w.[wait_time_seconds] - ISNULL(p.[wait_time_seconds], 0)
 	, [resource_wait_time_seconds] = w.[resource_wait_time_seconds] - ISNULL(p.[resource_wait_time_seconds], 0)
 	, [signal_wait_time_seconds] = w.[signal_wait_time_seconds] - ISNULL(p.[signal_wait_time_seconds], 0)
 	, [wait_count] = w.[wait_count] - ISNULL(p.[wait_count], 0)
+	, [LastUpdated] = SYSUTCDATETIME()
 	FROM @wait_stats w LEFT OUTER JOIN [internal].[wait_stats] p
 	  ON w.[wait_type] = p.[wait_type]
 	WHERE (w.[wait_count] - ISNULL(p.[wait_count], 0)) > 0

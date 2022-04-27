@@ -1,6 +1,4 @@
-﻿
-
-CREATE PROCEDURE [transfer].[server_stats]
+﻿CREATE   PROCEDURE [transfer].[server_stats]
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -9,11 +7,16 @@ BEGIN
 	FROM [data].[server_properties]
 	WHERE [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
 
-	SELECT serverid = @serverid
-	     , page_life_expectancy
-		 , user_connections
-		 , batch_requests_sec
-		 , rowtime
-		 , LastHandled
-	FROM [data].[server_stats]
+	UPDATE s
+	SET [LastHandled] = SYSUTCDATETIME()
+	OUTPUT @serverid serverid 
+	     , inserted.[page_life_expectancy]
+		 , inserted.[user_connections]
+		 , inserted.[batch_requests_sec]
+		 , inserted.[rowtime]
+		 , inserted.[LastUpdated]
+		 , inserted.[LastHandled]
+	FROM [data].[server_stats] s
+	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
+
 END

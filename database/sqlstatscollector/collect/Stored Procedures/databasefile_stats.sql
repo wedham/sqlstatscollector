@@ -112,6 +112,7 @@ INSERT INTO [data].[databasefile_stats]
            ,[num_of_writes]
            ,[num_of_bytes_written]
            ,[io_stall_write_ms]
+           ,[LastUpdated]
            ,[rowtime])
      SELECT [database_id] = currentstats.[database_id] 
 	       ,[file_id] = currentstats.[file_id] 
@@ -124,6 +125,7 @@ INSERT INTO [data].[databasefile_stats]
 		   ,[num_of_bytes_written] = currentstats.[num_of_bytes_written] - ISNULL(previousstats.[num_of_bytes_written], 0) 
 		   ,[io_stall_write_ms] = currentstats.[io_stall_write_ms] - ISNULL(previousstats.[io_stall_write_ms], 0)
 		   ,[rowtime] = SYSUTCDATETIME()
+		   ,[LastUpdated] = SYSUTCDATETIME()
   FROM @databasefile_stats currentstats
   LEFT OUTER JOIN [internal].[databasefile_stats] previousstats
   ON currentstats.[database_id] = previousstats.[database_id] AND currentstats.[file_id] = previousstats.[file_id]
