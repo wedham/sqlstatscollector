@@ -11,6 +11,7 @@ Date		Name				Description
 2022-04-21	Mikael Wedham		+Created v1
 2022-04-27	Mikael Wedham		+Managed null values when initializing
                                  Moved PLE to memory collection
+2022-04-28	Mikael Wedham		+Modified Schema of temp-tables
 *******************************************************************************/
 CREATE PROCEDURE [collect].[server_stats]
 AS
@@ -34,7 +35,7 @@ SET NOCOUNT ON
 	AND [counter_name] = N'Batch Requests/sec'
 
 	SELECT @previous_batch_requests_sec = ISNULL([batch_requests_sec], 0)
-	FROM [internal].[server_stats]
+	FROM [data_previous].[server_stats]
 
 	SELECT @batch_request_count = @batch_requests_sec - @previous_batch_requests_sec
 
@@ -47,9 +48,9 @@ SET NOCOUNT ON
 	INSERT INTO [data].[server_stats] ([user_connections], [batch_requests_sec], [rowtime], [LastUpdated])
 								SELECT @user_connections , @batch_request_count, SYSUTCDATETIME(), SYSUTCDATETIME()
 
-	TRUNCATE TABLE [internal].[server_stats]
+	TRUNCATE TABLE [data_previous].[server_stats]
 
-	INSERT INTO [internal].[server_stats] ([batch_requests_sec])
+	INSERT INTO [data_previous].[server_stats] ([batch_requests_sec])
     VALUES (@batch_requests_sec)
 
 END

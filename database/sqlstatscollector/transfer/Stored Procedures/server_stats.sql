@@ -1,4 +1,16 @@
-﻿CREATE   PROCEDURE [transfer].[server_stats]
+﻿/*******************************************************************************
+--Copyright (c) 2022 Mikael Wedham (MIT License)
+   -----------------------------------------
+   [transfer].[server_stats]
+   -----------------------------------------
+   Prepares and marks collected data as transferred. Returns the rows that
+   are updated since last transfer.
+
+Date		Name				Description
+----------	-------------		-----------------------------------------------
+2022-04-28	Mikael Wedham		+Created v1
+*******************************************************************************/
+CREATE   PROCEDURE [transfer].[server_stats]
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -10,7 +22,6 @@ BEGIN
 	UPDATE s
 	SET [LastHandled] = SYSUTCDATETIME()
 	OUTPUT @serverid serverid 
-	     , inserted.[page_life_expectancy]
 		 , inserted.[user_connections]
 		 , inserted.[batch_requests_sec]
 		 , inserted.[rowtime]

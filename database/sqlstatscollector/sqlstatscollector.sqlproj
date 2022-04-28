@@ -76,6 +76,8 @@
     <Folder Include="dbo\Synonyms\" />
     <Folder Include="transfer\" />
     <Folder Include="transfer\Stored Procedures\" />
+    <Folder Include="data_previous\" />
+    <Folder Include="data_previous\Tables\" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="internal\Tables\collectors.sql" />
@@ -97,7 +99,6 @@
     <Build Include="Security\cron.sql" />
     <Build Include="Security\data.sql" />
     <Build Include="Security\internal.sql" />
-    <Build Include="internal\Tables\wait_stats.sql" />
     <Build Include="data\Tables\wait_stats.sql" />
     <Build Include="data\Tables\database_properties.sql" />
     <Build Include="collect\Stored Procedures\wait_stats.sql" />
@@ -109,7 +110,6 @@
     <Build Include="collect\Stored Procedures\database_properties.sql" />
     <Build Include="collect\Stored Procedures\cpu_stats.sql" />
     <Build Include="collect\Stored Procedures\a_template.sql" />
-    <Build Include="internal\Tables\databasefile_stats.sql" />
     <Build Include="data\Tables\databasefile_stats.sql" />
     <Build Include="data\Tables\databasefile_properties.sql" />
     <Build Include="data\Tables\cpu_stats.sql" />
@@ -117,7 +117,6 @@
     <Build Include="collect\Stored Procedures\memory_stats.sql" />
     <Build Include="Security\validate.sql" />
     <Build Include="data\Tables\job_properties.sql" />
-    <Build Include="internal\Tables\server_stats.sql" />
     <Build Include="data\Tables\server_stats.sql" />
     <Build Include="transfer\Stored Procedures\wait_stats.sql" />
     <Build Include="transfer\Stored Procedures\server_stats.sql" />
@@ -129,6 +128,13 @@
     <Build Include="transfer\Stored Procedures\cpu_stats.sql" />
     <Build Include="Security\transfer.sql" />
     <Build Include="data\Tables\memory_stats.sql" />
+    <Build Include="data_previous\Tables\wait_stats.sql" />
+    <Build Include="data_previous\Tables\server_stats.sql" />
+    <Build Include="data_previous\Tables\databasefile_stats.sql" />
+    <Build Include="transfer\Stored Procedures\memory_stats.sql" />
+    <Build Include="transfer\Stored Procedures\job_stats.sql" />
+    <Build Include="internal\Stored Procedures\collectors_for_transfer.sql" />
+    <Build Include="Security\data_previous.sql" />
   </ItemGroup>
   <ItemGroup>
     <ArtifactReference Include="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\SQLDB\Extensions\SqlServer\130\SqlSchemas\master.dacpac">

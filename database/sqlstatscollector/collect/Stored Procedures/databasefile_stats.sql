@@ -9,6 +9,7 @@
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-01-21	Mikael Wedham		+Created v1
+2022-04-28	Mikael Wedham		+Modified Schema of temp-tables
 *******************************************************************************/
 CREATE PROCEDURE [collect].[databasefile_stats]
 AS
@@ -127,11 +128,11 @@ INSERT INTO [data].[databasefile_stats]
 		   ,[rowtime] = SYSUTCDATETIME()
 		   ,[LastUpdated] = SYSUTCDATETIME()
   FROM @databasefile_stats currentstats
-  LEFT OUTER JOIN [internal].[databasefile_stats] previousstats
+  LEFT OUTER JOIN [data_previous].[databasefile_stats] previousstats
   ON currentstats.[database_id] = previousstats.[database_id] AND currentstats.[file_id] = previousstats.[file_id]
 
-TRUNCATE TABLE [internal].[databasefile_stats]
-INSERT INTO [internal].[databasefile_stats]
+TRUNCATE TABLE [data_previous].[databasefile_stats]
+INSERT INTO [data_previous].[databasefile_stats]
 		   ([database_id] ,[file_id] ,[size] ,[free_pages] ,[num_of_reads] ,[num_of_bytes_read] ,[io_stall_read_ms] ,[num_of_writes] ,[num_of_bytes_written] ,[io_stall_write_ms])
 	 SELECT [database_id] ,[file_id] ,[size] ,[free_pages] ,[num_of_reads] ,[num_of_bytes_read] ,[io_stall_read_ms] ,[num_of_writes] ,[num_of_bytes_written] ,[io_stall_write_ms]
   FROM @databasefile_stats

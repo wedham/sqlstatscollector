@@ -1,5 +1,16 @@
 ﻿
+/*******************************************************************************
+--Copyright (c) 2022 Mikael Wedham (MIT License)
+   -----------------------------------------
+   [transfer].[job_properties]
+   -----------------------------------------
+   Prepares and marks collected data as transferred. Returns the rows that
+   are updated since last transfer.
 
+Date		Name				Description
+----------	-------------		-----------------------------------------------
+2022-04-28	Mikael Wedham		+Created v1
+*******************************************************************************/
 CREATE PROCEDURE [transfer].[job_properties]
 AS
 BEGIN
@@ -9,19 +20,23 @@ BEGIN
 	FROM [data].[server_properties]
 	WHERE [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
 
-	SELECT serverid = @serverid
-	     , job_id
-		 , job_name
-		 , [description]
-		 , job_category
-		 , job_owner
-		 , [enabled]
-		 , notify_email_desc
-		 , run_status_desc
-		 , last_startdate
-		 , last_duration
-		 , run_duration_avg
-		 , LastUpdated
-		 , LastHandled
-	FROM [data].[job_properties]
+	UPDATE s
+	SET [LastHandled] = SYSUTCDATETIME()
+	OUTPUT @serverid serverid 
+	     , inserted.[job_id]
+		 , inserted.[job_name]
+		 , inserted.[description]
+		 , inserted.[job_category]
+		 , inserted.[job_owner]
+		 , inserted.[enabled]
+		 , inserted.[notify_email_desc]
+		 , inserted.[run_status_desc]
+		 , inserted.[last_startdate]
+		 , inserted.[last_duration]
+		 , inserted.[run_duration_avg]
+		 , inserted.[LastUpdated]
+		 , inserted.[LastHandled]
+	FROM [data].[job_properties] s
+	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
+
 END

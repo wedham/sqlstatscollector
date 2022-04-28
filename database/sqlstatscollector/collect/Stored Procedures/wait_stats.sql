@@ -11,6 +11,7 @@
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-01-21	Mikael Wedham		+Created v1
+2022-04-28	Mikael Wedham		+Modified Schema of temp-tables
 *******************************************************************************/
 CREATE   PROCEDURE [collect].[wait_stats]
 AS
@@ -56,13 +57,13 @@ DECLARE @wait_stats TABLE ([wait_type] nvarchar(60) NOT NULL
 	, [signal_wait_time_seconds] = w.[signal_wait_time_seconds] - ISNULL(p.[signal_wait_time_seconds], 0)
 	, [wait_count] = w.[wait_count] - ISNULL(p.[wait_count], 0)
 	, [LastUpdated] = SYSUTCDATETIME()
-	FROM @wait_stats w LEFT OUTER JOIN [internal].[wait_stats] p
+	FROM @wait_stats w LEFT OUTER JOIN [data_previous].[wait_stats] p
 	  ON w.[wait_type] = p.[wait_type]
 	WHERE (w.[wait_count] - ISNULL(p.[wait_count], 0)) > 0
 
-	TRUNCATE TABLE [internal].[wait_stats]
+	TRUNCATE TABLE [data_previous].[wait_stats]
 
-	INSERT INTO [internal].[wait_stats] ([wait_type], [wait_time_seconds], [resource_wait_time_seconds], [signal_wait_time_seconds], [wait_count])
+	INSERT INTO [data_previous].[wait_stats] ([wait_type], [wait_time_seconds], [resource_wait_time_seconds], [signal_wait_time_seconds], [wait_count])
 	SELECT [wait_type], [wait_time_seconds], [resource_wait_time_seconds], [signal_wait_time_seconds], [wait_count]
 	FROM @wait_stats
 

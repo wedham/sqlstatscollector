@@ -1,4 +1,4 @@
-﻿CREATE TABLE [internal].[databasefile_stats] (
+﻿CREATE TABLE [data_previous].[databasefile_stats] (
     [database_id]          INT    NOT NULL,
     [file_id]              INT    NOT NULL,
     [size]                 INT    NOT NULL,
