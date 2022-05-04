@@ -136,6 +136,7 @@
     <Build Include="data\Tables\availability_group_properties.sql" />
     <Build Include="transfer\Stored Procedures\availability_group_properties.sql" />
     <Build Include="collect\Stored Procedures\availability_group_properties.sql" />
+    <Build Include="cron\Functions\GetNextScheduleAfter.sql" />
   </ItemGroup>
   <ItemGroup>
     <ArtifactReference Include="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\SQLDB\Extensions\SqlServer\130\SqlSchemas\master.dacpac">
