@@ -103,7 +103,6 @@
     <Build Include="data\Tables\database_properties.sql" />
     <Build Include="collect\Stored Procedures\wait_stats.sql" />
     <Build Include="collect\Stored Procedures\server_stats.sql" />
-    <Build Include="collect\Stored Procedures\job_stats.sql" />
     <Build Include="collect\Stored Procedures\job_properties.sql" />
     <Build Include="collect\Stored Procedures\databasefile_stats.sql" />
     <Build Include="collect\Stored Procedures\databasefile_properties.sql" />
@@ -132,9 +131,11 @@
     <Build Include="data_previous\Tables\server_stats.sql" />
     <Build Include="data_previous\Tables\databasefile_stats.sql" />
     <Build Include="transfer\Stored Procedures\memory_stats.sql" />
-    <Build Include="transfer\Stored Procedures\job_stats.sql" />
     <Build Include="internal\Stored Procedures\collectors_for_transfer.sql" />
     <Build Include="Security\data_previous.sql" />
+    <Build Include="data\Tables\availability_group_properties.sql" />
+    <Build Include="transfer\Stored Procedures\availability_group_properties.sql" />
+    <Build Include="collect\Stored Procedures\availability_group_properties.sql" />
   </ItemGroup>
   <ItemGroup>
     <ArtifactReference Include="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\SQLDB\Extensions\SqlServer\130\SqlSchemas\master.dacpac">

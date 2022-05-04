@@ -75,5 +75,6 @@
     <Build Include="data\Tables\wait_stats.sql" />
     <Build Include="Security\internal.sql" />
     <Build Include="Security\data.sql" />
+    <Build Include="data\Tables\availability_group_properties.sql" />
   </ItemGroup>
 </Project>

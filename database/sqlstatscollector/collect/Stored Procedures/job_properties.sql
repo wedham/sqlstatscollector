@@ -16,6 +16,20 @@ BEGIN
 PRINT('[collect].[job_properties] - Get all defined jobs in the server')
 SET NOCOUNT ON
 ;
+WITH [details] AS (
+				SELECT [rowselector] = ROW_NUMBER() OVER (PARTITION BY h.[job_id] ORDER BY h.[run_date] DESC, h.[run_time] DESC)
+				, h.[job_id]
+				, h.[run_duration]
+				FROM [msdb].[dbo].[sysjobhistory] h
+				WHERE h.[step_id] = 0
+				), [jobdurations] AS
+				(
+				SELECT [job_id]
+				, [run_duration_avg] = CAST(AVG([run_duration] * 1.0) AS decimal(18,3))
+				FROM [details]
+				WHERE [rowselector] <= 50
+				GROUP BY [job_id]
+				)
 	MERGE [data].[job_properties] dest
 	USING (
 	SELECT job_id = sj.[job_id]
@@ -35,8 +49,9 @@ SET NOCOUNT ON
 												 WHEN 3 THEN 'CANCELLED'
 												 WHEN 4 THEN 'IN PROGRESS'
 												 END
-		 , last_duration = h.[run_duration]
 		 , last_startdate = CONVERT(DATETIME, RTRIM(h.[run_date]) + ' ' + STUFF(STUFF(REPLACE(STR(RTRIM(h.[run_time]),6,0),' ','0'),3,0,':'),6,0,':'))
+		 , last_duration = h.[run_duration]
+		 , run_duration_avg = d.[run_duration_avg]
 	FROM msdb.dbo.sysjobs AS sj WITH (NOLOCK)
 	INNER JOIN
 		(SELECT [job_id], instance_id = MAX([instance_id])
@@ -45,9 +60,11 @@ SET NOCOUNT ON
 	ON sj.[job_id] = l.[job_id]
 	INNER JOIN msdb.dbo.syscategories AS sc WITH (NOLOCK)
 	ON sj.[category_id] = sc.[category_id]
-	INNER JOIN msdb.dbo.sysjobhistory AS h WITH (NOLOCK)
+	LEFT OUTER JOIN msdb.dbo.sysjobhistory AS h WITH (NOLOCK)
 	ON h.[job_id] = l.[job_id]
 	AND h.[instance_id] = l.[instance_id]
+	LEFT OUTER JOIN  [jobdurations] d
+	ON d.[job_id] = sj.[job_id]
 	) src
 	ON src.[job_id] = dest.[job_id]
 	WHEN NOT MATCHED THEN
@@ -88,6 +105,7 @@ SET NOCOUNT ON
 		  ,[run_status_desc] = src.[run_status_desc]
 		  ,[last_duration] = src.[last_duration]
 		  ,[last_startdate] = src.[last_startdate]
+		  ,[run_duration_avg] = src.[run_duration_avg]
 		  ,[LastUpdated] = SYSUTCDATETIME() 
 	;
 

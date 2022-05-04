@@ -10,6 +10,8 @@ Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-01-21	Mikael Wedham		+Created v1
 2022-04-28	Mikael Wedham		+Modified Schema of temp-tables
+2022-05-04	Mikael Wedham		+Try/Catch for DBCC where database 
+                                 is unavailable due to AOAG
 *******************************************************************************/
 CREATE PROCEDURE [collect].[databasefile_stats]
 AS
@@ -40,19 +42,44 @@ DECLARE	@database_id int
 DECLARE	@file_id int
 DECLARE @SQL varchar(512);
 
+DECLARE @databases TABLE ([name] sysname, [database_id] int, [file_id] int, [file_name] sysname )
+
+DECLARE @v varchar(20)
+SELECT @v = [internal].[GetSQLServerVersion]()
+
+IF (@v IN ('2005', '2008', '2008R2'))
+BEGIN
+	INSERT INTO @databases([name] , [database_id] , [file_id] , [file_name])
+	SELECT d.[name], d.database_id, f.file_id, f.name
+		FROM sys.databases d INNER JOIN sys.master_files f ON d.database_id = f.database_id
+		WHERE d.[state_desc] = 'ONLINE'
+END
+ELSE
+BEGIN
+	INSERT INTO @databases([name] , [database_id] , [file_id] , [file_name])
+	SELECT d.[name], d.database_id, f.file_id, f.name
+		FROM sys.databases d INNER JOIN sys.master_files f ON d.database_id = f.database_id
+		LEFT OUTER JOIN sys.dm_hadr_availability_replica_states rs
+		  ON rs.replica_id = d.replica_id
+		WHERE d.[state_desc] = 'ONLINE'
+		  AND ISNULL(rs.role_desc, N'PRIMARY') = N'PRIMARY'
+END
+;
+
+
 --/*  */
 --Loop all online databases 
 DECLARE spaceused CURSOR
 	LOCAL STATIC FORWARD_ONLY READ_ONLY
-	FOR SELECT d.[name], d.database_id, f.file_id, f.name
-		FROM sys.databases d INNER JOIN sys.master_files f ON d.database_id = f.database_id
-		WHERE d.[state_desc] = 'ONLINE'
+	FOR SELECT [name] , [database_id] , [file_id] , [file_name]
+		FROM @databases
 
 OPEN spaceused;
 FETCH NEXT FROM spaceused INTO @dbname, @database_id, @file_id, @filename;
 WHILE @@FETCH_STATUS = 0
 BEGIN
     /*  */
+	BEGIN TRY
 	SET @SQL = 'Use [' + @dbname +'];' +char(10)+char(13)
 	SET @SQL = @SQL + 'SELECT ' 
 	                + CAST(@database_id AS nvarchar(10)) 
@@ -63,6 +90,9 @@ BEGIN
 
 	INSERT INTO @sizeresults ([database_id], [file_id], [used_pages] )
 	EXEC (@SQL);
+	END TRY
+	BEGIN CATCH
+	END CATCH
 
 	SET @SQL = ''
 

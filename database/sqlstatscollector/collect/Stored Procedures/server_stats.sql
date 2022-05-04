@@ -39,7 +39,7 @@ SET NOCOUNT ON
 
 	SELECT @batch_request_count = @batch_requests_sec - @previous_batch_requests_sec
 
-	IF @batch_request_count < 0
+	IF @batch_request_count IS NULL OR @batch_request_count < 0 
 	BEGIN
 		--If counter was reset/restarted then begin with a new value
 		SELECT @batch_request_count = ISNULL(@batch_requests_sec, 0)
