@@ -1,17 +1,18 @@
 ﻿
+
 /*******************************************************************************
 --Copyright (c) 2022 Mikael Wedham (MIT License)
    -----------------------------------------
-   [transfer].[wait_stats]
+   [transfer].[database_memory_usage]
    -----------------------------------------
    Prepares and marks collected data as transferred. Returns the rows that
    are updated since last transfer.
 
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
-2022-04-28	Mikael Wedham		+Created v1
+2022-05-05	Mikael Wedham		+Created v1
 *******************************************************************************/
-CREATE PROCEDURE [transfer].[wait_stats]
+CREATE PROCEDURE [transfer].[database_memory_usage]
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -24,15 +25,13 @@ BEGIN
 	SET [LastHandled] = SYSUTCDATETIME()
 	OUTPUT @serverid serverid 
 	     , inserted.[rowtime]
-		 , inserted.[wait_type]
-		 , inserted.[interval_percentage]
-		 , inserted.[wait_time_seconds]
-		 , inserted.[resource_wait_time_seconds]
-		 , inserted.[signal_wait_time_seconds]
-		 , inserted.[wait_count]
+		 , inserted.[database_id]
+		 , inserted.[page_count]
+		 , inserted.[cached_size_mb]
+		 , inserted.[buffer_pool_percent]
 		 , inserted.[LastUpdated]
 		 , inserted.[LastHandled]
-	FROM [data].[wait_stats] s
+	FROM [data].[database_memory_usage] s
 	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
 
 END

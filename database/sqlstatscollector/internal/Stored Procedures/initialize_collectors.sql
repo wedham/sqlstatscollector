@@ -36,6 +36,10 @@ BEGIN
 	   UNION ALL
 	   SELECT 'core', 'memory_stats', '*/10 * * * *'                       --memory statistics collected every 10 minutes
 	   UNION ALL
+	   SELECT 'core', 'database_cpu_usage', '*/10 * * * *'                 --cpu statistics per database collected every 10 minutes
+	   UNION ALL
+	   SELECT 'core', 'database_memory_usage', '*/10 * * * *'              --memory statistics per database collected every 10 minutes
+	   UNION ALL
 	   SELECT 'hadr', 'availability_group_properties', '*/20 * * * *'      --Availability group information collected every 20 minutes
 	)
 	MERGE [internal].[collectors] dest
