@@ -9,6 +9,7 @@
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-01-21	Mikael Wedham		+Created v1
+2022-05-11  Mikael Wedham		+Fixed scheduling issue
 *******************************************************************************/
 CREATE   PROCEDURE [collect].[run]
 AS
@@ -31,7 +32,7 @@ SET NOCOUNT ON
 	SELECT c.collector
 	FROM internal.collectors c
 	CROSS APPLY cron.GetNextScheduleAfter(c.cron, c.lastrun) times
-	WHERE times.scheduledtime > c.lastrun
+	WHERE times.scheduledtime < SYSUTCDATETIME()
 
 	WHILE EXISTS (SELECT * FROM #collectors)
 	BEGIN 
