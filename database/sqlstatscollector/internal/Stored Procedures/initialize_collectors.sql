@@ -32,7 +32,7 @@ BEGIN
 	   UNION ALL
 	   SELECT 'core', 'databasefile_stats', '*/10 * * * *'                 --delta calculated file sizes and IO stats stats collected every 10 minutes
 	   UNION ALL
-	   SELECT 'core', 'cpu_stats', '*/10 * * * *'                          --actual cpu consumtion stats collected every 10 minutes
+	   SELECT 'core', 'cpu_stats', '0 * * * *'                             --actual cpu consumtion stats collected every hour
 	   UNION ALL
 	   SELECT 'core', 'memory_stats', '*/10 * * * *'                       --memory statistics collected every 10 minutes
 	   UNION ALL

@@ -118,7 +118,7 @@ BEGIN
 
 	--Generate all time values, by combining all hours and all minutes
 	INSERT INTO @ttimes(value)
-	SELECT t = TIMEFROMPARTS( h.value, m.value, 0, 0, 0)
+	SELECT t = RIGHT('0' + CAST(h.value as varchar(2)), 2) + ':' + RIGHT('0' + CAST(m.value as varchar(2)), 2) + ':00'
 	FROM @tHours h CROSS JOIN @tMinutes m
 
 	;WITH allScheduledTimes AS --Generate datetime values for all dates and times
