@@ -11,6 +11,7 @@
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-05-05	Mikael Wedham		+Created v1
+2022-08-17	Mikael Wedham		Added cleanup of old data
 *******************************************************************************/
 CREATE PROCEDURE [transfer].[database_memory_usage]
 AS
@@ -33,5 +34,8 @@ BEGIN
 		 , inserted.[LastHandled]
 	FROM [data].[database_memory_usage] s
 	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
+
+	DELETE FROM [data].[database_memory_usage]
+	WHERE [LastHandled] < DATEADD(DAY, -7, GETDATE())
 
 END

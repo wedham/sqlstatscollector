@@ -10,6 +10,7 @@
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-04-28	Mikael Wedham		+Created v1
+2022-08-17	Mikael Wedham		Added cleanup of old data
 *******************************************************************************/
 CREATE PROCEDURE [transfer].[wait_stats]
 AS
@@ -34,5 +35,8 @@ BEGIN
 		 , inserted.[LastHandled]
 	FROM [data].[wait_stats] s
 	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
+	
+	DELETE FROM [data].[wait_stats]
+	WHERE [LastHandled] < DATEADD(DAY, -7, GETDATE())
 
 END

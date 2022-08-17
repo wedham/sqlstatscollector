@@ -10,6 +10,7 @@
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-04-28	Mikael Wedham		+Created v1
+2022-08-17	Mikael Wedham		Added cleanup of old data
 *******************************************************************************/
 CREATE PROCEDURE [transfer].[cpu_stats]
 AS
@@ -32,5 +33,8 @@ BEGIN
 		 , inserted.[LastHandled]
 	FROM [data].[cpu_stats] s
 	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
+
+	DELETE FROM [data].[cpu_stats]
+	WHERE [LastHandled] < DATEADD(DAY, -7, GETDATE())
 
 END
