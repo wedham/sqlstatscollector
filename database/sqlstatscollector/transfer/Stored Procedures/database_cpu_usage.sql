@@ -14,6 +14,7 @@ Date		Name				Description
 2022-08-17	Mikael Wedham		Added cleanup of old data
 *******************************************************************************/
 CREATE PROCEDURE [transfer].[database_cpu_usage]
+(@cleanup bit = 0)
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -34,7 +35,10 @@ BEGIN
 	FROM [data].[database_cpu_usage] s
 	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
 
-	DELETE FROM [data].[database_cpu_usage]
-	WHERE [LastHandled] < DATEADD(DAY, -7, GETDATE())
+	IF @cleanup = 1
+	BEGIN
+		DELETE FROM [data].[database_cpu_usage]
+		WHERE [LastHandled] < DATEADD(DAY, -7, GETDATE())
+	END
 
 END

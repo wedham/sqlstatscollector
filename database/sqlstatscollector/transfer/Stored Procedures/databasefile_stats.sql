@@ -13,6 +13,7 @@ Date		Name				Description
 2022-08-17	Mikael Wedham		Added cleanup of old data
 *******************************************************************************/
 CREATE PROCEDURE [transfer].[databasefile_stats]
+(@cleanup bit = 0)
 AS
 BEGIN
 	SET NOCOUNT ON
@@ -40,7 +41,10 @@ BEGIN
 	FROM [data].[databasefile_stats] s
 	WHERE [LastHandled] IS NULL OR [LastUpdated] > [LastHandled]
 
-	DELETE FROM [data].[databasefile_stats]
-	WHERE [LastHandled] < DATEADD(DAY, -7, GETDATE())
+	IF @cleanup = 1
+	BEGIN
+		DELETE FROM [data].[databasefile_stats]
+		WHERE [LastHandled] < DATEADD(DAY, -7, GETDATE())
+	END
 
 END

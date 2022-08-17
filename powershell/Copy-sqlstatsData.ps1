@@ -94,7 +94,7 @@ $collectorcon = New-Object System.Data.SqlClient.SqlConnection
 $collectorcon.ConnectionString = "Server=.;Database=sqlstatscentral;Integrated Security=True"
 
 $TableCmd = New-Object System.Data.SqlClient.SqlCommand
-$TableCmd.CommandText = $("SELECT [ConnectionString], serverkey = CAST([serverkey] AS nvarchar(18)) FROM [internal].[sqlserverinstances]")
+$TableCmd.CommandText = $("SELECT [ConnectionString], serverkey = CAST([serverkey] AS nvarchar(18)) FROM [internal].[sqlserverinstances] WHERE [IsActive] = 1")
 $TableCmd.Connection = $collectorcon
 
 $TableSqlAdapter = New-Object System.Data.SqlClient.SqlDataAdapter
