@@ -143,6 +143,8 @@
     <Build Include="transfer\Stored Procedures\database_cpu_usage.sql" />
     <Build Include="collect\Stored Procedures\database_memory_usage.sql" />
     <Build Include="collect\Stored Procedures\database_cpu_usage.sql" />
+    <Build Include="data\Tables\connection_properties.sql" />
+    <Build Include="collect\Stored Procedures\connection_properties.sql" />
   </ItemGroup>
   <ItemGroup>
     <ArtifactReference Include="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\SQLDB\Extensions\SqlServer\130\SqlSchemas\master.dacpac">
