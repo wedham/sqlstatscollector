@@ -76,6 +76,8 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-05-05	Mikael Wedham		+Created v1
+2024-01-19	Mikael Wedham		+Added logging of duration
+2024-01-23	Mikael Wedham		+Added errorhandling
 *******************************************************************************/
 ALTER PROCEDURE [collect].[database_memory_usage]
 AS
@@ -83,24 +85,51 @@ BEGIN
 PRINT('[collect].[database_memory_usage] - Collecting wait_stats for SQL Server')
 SET NOCOUNT ON
 
-	;WITH memory_usage AS
-	(SELECT [database_id]
-		  , [page_count] = COUNT(page_id) 
-		  , [cached_size_mb] = CAST(COUNT_BIG(*) * 8/1024.0 AS decimal(15,2))
-	FROM sys.dm_os_buffer_descriptors WITH (NOLOCK)
-	GROUP BY database_id)
+	DECLARE @current_start datetime2(7)
+	DECLARE @current_end datetime2(7)
+	DECLARE @current_logitem int
+	DECLARE @error int = 0
 
-	INSERT INTO [data].[database_memory_usage]  ([rowtime] ,[database_id] ,[page_count] ,[cached_size_mb] , [buffer_pool_percent], [LastUpdated])
-	SELECT [rowtime] = SYSUTCDATETIME()
-		 , [database_id]
-		 , [page_count]
-		 , [cached_size_mb] 
-		 , [buffer_pool_percent] = CAST([cached_size_mb] / SUM([cached_size_mb]) OVER() * 100.0 AS decimal(5,2))
-		 , [LastUpdated] = SYSUTCDATETIME()
-	FROM memory_usage
-	WHERE [database_id] <> 32767 -- ResourceDB
-	  AND [page_count] > 0
-	;
+	SELECT @current_start = SYSUTCDATETIME()
+	INSERT INTO [internal].[executionlog] ([collector], [StartTime])
+	VALUES (N'database_memory_usage', @current_start)
+	SET @current_logitem = SCOPE_IDENTITY()
+
+	BEGIN TRY
+
+		;WITH memory_usage AS
+		(SELECT [database_id]
+			, [page_count] = COUNT(page_id) 
+			, [cached_size_mb] = CAST(COUNT_BIG(*) * 8/1024.0 AS decimal(15,2))
+		FROM sys.dm_os_buffer_descriptors WITH (NOLOCK)
+		GROUP BY database_id)
+
+		INSERT INTO [data].[database_memory_usage]  ([rowtime] ,[database_id] ,[page_count] ,[cached_size_mb] , [buffer_pool_percent], [LastUpdated])
+		SELECT [rowtime] = SYSUTCDATETIME()
+			, [database_id]
+			, [page_count]
+			, [cached_size_mb] 
+			, [buffer_pool_percent] = CAST([cached_size_mb] / SUM([cached_size_mb]) OVER() * 100.0 AS decimal(5,2))
+			, [LastUpdated] = SYSUTCDATETIME()
+		FROM memory_usage
+		WHERE [database_id] <> 32767 -- ResourceDB
+		AND [page_count] > 0
+		;
+
+	END TRY
+	BEGIN CATCH
+		DECLARE @msg nvarchar(4000)
+		SELECT @error = ERROR_NUMBER(), @msg = ERROR_MESSAGE()
+		PRINT (@msg)
+	END CATCH
+
+	SELECT @current_end = SYSUTCDATETIME()
+	UPDATE [internal].[executionlog]
+	SET [EndTime] = @current_end
+	, [Duration_ms] =  ((CAST(DATEDIFF(S, @current_start, @current_end) AS bigint) * 1000000) + (DATEPART(MCS, @current_end)-DATEPART(MCS, @current_start))) / 1000.0
+	, [errornumber] = @@ERROR
+	WHERE [Id] = @current_logitem
+
 
 END
 GO
@@ -172,6 +201,6 @@ MERGE [internal].[collectors] dest
 	USING (SELECT [section], [collector], [cron] FROM [collector]) src
 		ON src.[collector] = dest.[collector]
 	WHEN NOT MATCHED THEN 
-		INSERT ([section], [collector], [cron], [lastrun])
-		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01');
+		INSERT ([section], [collector], [cron], [lastrun], [is_enabled])
+		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01', 1);
 GO

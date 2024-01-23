@@ -112,6 +112,8 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-05-05	Mikael Wedham		+Created v1
+2024-01-19	Mikael Wedham		+Added logging of duration
+2024-01-23	Mikael Wedham		+Added errorhandling
 *******************************************************************************/
 ALTER PROCEDURE [collect].[database_cpu_usage]
 AS
@@ -119,37 +121,64 @@ BEGIN
 PRINT('[collect].[database_cpu_usage] - Collecting wait_stats for SQL Server')
 SET NOCOUNT ON
 
-DECLARE @database_cpu_usage TABLE ([database_id] int NOT NULL
-                                  ,[cpu_time_ms] decimal(18,3) NOT NULL)
+	DECLARE @current_start datetime2(7)
+	DECLARE @current_end datetime2(7)
+	DECLARE @current_logitem int
+	DECLARE @error int = 0
 
-	INSERT INTO @database_cpu_usage ([database_id], [cpu_time_ms])
-	SELECT a.database_id
-		 , [cpu_time_ms] = SUM(qs.total_worker_time/1000.0) 
-	 FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
-	 CROSS APPLY (SELECT database_id = CAST([value] AS int) 
-				  FROM sys.dm_exec_plan_attributes(qs.plan_handle)
-				  WHERE attribute = N'dbid') a
-	WHERE [database_id] <> 32767 -- ResourceDB
-	GROUP BY [database_id]
+	SELECT @current_start = SYSUTCDATETIME()
+	INSERT INTO [internal].[executionlog] ([collector], [StartTime])
+	VALUES (N'database_cpu_usage', @current_start)
+	SET @current_logitem = SCOPE_IDENTITY()
 
-	;WITH cpu_usage AS (
-	SELECT cpu.[database_id]
-		 , [cpu_time_ms] = cpu.[cpu_time_ms] - ISNULL(pcpu.[cpu_time_ms], 0)
-	FROM @database_cpu_usage cpu LEFT OUTER JOIN [internal_data].[database_cpu_usage] pcpu
-	  ON cpu.database_id = pcpu.database_id)
-	INSERT INTO [data].[database_cpu_usage] ([rowtime], [database_id], [cpu_time_ms], [cpu_percent], [LastUpdated])
-	SELECT [rowtime] = SYSUTCDATETIME()
-		 , [database_id]
-		 , [cpu_time_ms]
-		 , [cpu_percent] = CAST(CASE WHEN (SUM([cpu_time_ms]) OVER()) = 0 THEN 0 ELSE ([cpu_time_ms] * 1.0 / SUM([cpu_time_ms]) OVER() * 100.0) END AS decimal(5, 2) )
-		 , [LastUpdated] = SYSUTCDATETIME()
-	FROM cpu_usage
-	WHERE [cpu_time_ms] > 0
+	DECLARE @database_cpu_usage TABLE ([database_id] int NOT NULL
+									,[cpu_time_ms] decimal(18,3) NOT NULL)
 
-	TRUNCATE TABLE [internal_data].[database_cpu_usage]
+	BEGIN TRY
 
-	INSERT INTO [internal_data].[database_cpu_usage] ([database_id] ,[cpu_time_ms])
-	SELECT [database_id] ,[cpu_time_ms] FROM @database_cpu_usage
+		INSERT INTO @database_cpu_usage ([database_id], [cpu_time_ms])
+		SELECT a.database_id
+			, [cpu_time_ms] = SUM(qs.total_worker_time/1000.0) 
+		FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		CROSS APPLY (SELECT database_id = CAST([value] AS int) 
+					FROM sys.dm_exec_plan_attributes(qs.plan_handle)
+					WHERE attribute = N'dbid') a
+		WHERE [database_id] <> 32767 -- ResourceDB
+		GROUP BY [database_id]
+
+		;WITH cpu_usage AS (
+		SELECT cpu.[database_id]
+			, [cpu_time_ms] = cpu.[cpu_time_ms] - ISNULL(pcpu.[cpu_time_ms], 0)
+		FROM @database_cpu_usage cpu LEFT OUTER JOIN [internal_data].[database_cpu_usage] pcpu
+		ON cpu.database_id = pcpu.database_id)
+		INSERT INTO [data].[database_cpu_usage] ([rowtime], [database_id], [cpu_time_ms], [cpu_percent], [LastUpdated])
+		SELECT [rowtime] = SYSUTCDATETIME()
+			, [database_id]
+			, [cpu_time_ms]
+			, [cpu_percent] = CAST(CASE WHEN (SUM([cpu_time_ms]) OVER()) = 0 THEN 0 ELSE ([cpu_time_ms] * 1.0 / SUM([cpu_time_ms]) OVER() * 100.0) END AS decimal(5, 2) )
+			, [LastUpdated] = SYSUTCDATETIME()
+		FROM cpu_usage
+		WHERE [cpu_time_ms] > 0
+
+		TRUNCATE TABLE [internal_data].[database_cpu_usage]
+
+		INSERT INTO [internal_data].[database_cpu_usage] ([database_id] ,[cpu_time_ms])
+		SELECT [database_id] ,[cpu_time_ms] FROM @database_cpu_usage
+
+	END TRY
+	BEGIN CATCH
+		DECLARE @msg nvarchar(4000)
+		SELECT @error = ERROR_NUMBER(), @msg = ERROR_MESSAGE()
+		PRINT (@msg)
+	END CATCH
+
+	SELECT @current_end = SYSUTCDATETIME()
+	UPDATE [internal].[executionlog]
+	SET [EndTime] = @current_end
+	, [Duration_ms] =  ((CAST(DATEDIFF(S, @current_start, @current_end) AS bigint) * 1000000) + (DATEPART(MCS, @current_end)-DATEPART(MCS, @current_start))) / 1000.0
+	, [errornumber] = @@ERROR
+	WHERE [Id] = @current_logitem
+
 
 END
 GO
@@ -218,6 +247,6 @@ MERGE [internal].[collectors] dest
 	USING (SELECT [section], [collector], [cron] FROM [collector]) src
 		ON src.[collector] = dest.[collector]
 	WHEN NOT MATCHED THEN 
-		INSERT ([section], [collector], [cron], [lastrun])
-		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01');
+		INSERT ([section], [collector], [cron], [lastrun], [is_enabled])
+		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01', 1);
 GO

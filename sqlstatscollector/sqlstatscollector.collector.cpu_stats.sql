@@ -83,41 +83,72 @@ Date		Name				Description
 2022-01-21	Mikael Wedham		+Created v1
 2022-04-27	Mikael Wedham		+Brackets and naming
 2023-08-09	Mikael Wedham		+Added RowDate to handle roll-over of the record_id column
+2024-01-19	Mikael Wedham		+Added logging of duration
+2024-01-23	Mikael Wedham		+Added errorhandling
 *******************************************************************************/
 ALTER PROCEDURE [collect].[cpu_stats]
 AS
 BEGIN
-    PRINT('[collect].[cpu_stats] - gathering CPU usage for SQL Server process (minutely, with a maximum of 60 minutes)')
-	SET NOCOUNT ON
-	--Calculate the number of ticks. Needed for time conversion
-	DECLARE @ts_now bigint = (SELECT [cpu_ticks]/([cpu_ticks]/[ms_ticks])FROM sys.dm_os_sys_info); 
+PRINT('[collect].[cpu_stats] - gathering CPU usage for SQL Server process (minutely, with a maximum of 60 minutes)')
+SET NOCOUNT ON
 
-	WITH [systemhealthresult] AS /* Get only the SystemHealth events from the XEvent trace */ 
-	(	SELECT [timestamp] --Tick based time counter
-			 , [record] = CONVERT(xml, [record]) --XML data
-		FROM sys.dm_os_ring_buffers 
-		WHERE [ring_buffer_type] = N'RING_BUFFER_SCHEDULER_MONITOR' 
-		  AND [record] LIKE '%<SystemHealth>%'
-	), [cpustats] AS /* Parse and convert the XML values to usable columns */
-	(   SELECT [record_id] = [record].value('(./Record/@id)[1]', 'int') --The unique record_id. Used to prevent duplicates
-			 , [SystemIdle] = [record].value('(./Record/SchedulerMonitorEvent/SystemHealth/SystemIdle)[1]', 'int') --Percentage of time CPU is idle
-			 , [SQLProcessUtilization] = [record].value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]', 'int') --Percentage of time CPU is used by SQL Server
-			 , [timestamp] --Tick based time counter
-		FROM [systemhealthresult])
+	DECLARE @current_start datetime2(7)
+	DECLARE @current_end datetime2(7)
+	DECLARE @current_logitem int
+	DECLARE @error int = 0
 
-	MERGE [data].[cpu_stats] dest USING
-	(SELECT TOP(60) [RowDate] = CAST(DATEADD(ms, -1 * (@ts_now - [timestamp]), SYSUTCDATETIME()) as date) --Real datetime (UTC) from the [timestamp]
-	              , [record_id]
-				  , [SQLProcessUtilization]
-				  , [SystemIdle]
-				  , [OtherProcess] = 100 - [SystemIdle] - [SQLProcessUtilization] -- Only calculated for easy reporting
-				  , [UTC] = CAST(DATEADD(ms, -1 * (@ts_now - [timestamp]), SYSUTCDATETIME()) as datetime2(3)) --Real datetime (UTC) from the [timestamp]
-	 FROM [cpustats]
-	 ORDER BY [record_id] DESC) src ON src.[record_id] = dest.[record_id] AND src.[RowDate] = dest.[RowDate]
-	WHEN NOT MATCHED THEN /* Only insert values based on the record_id. Never update anything */
-	   INSERT ([RowDate], [record_id], [idle_cpu], [sql_cpu], [other_cpu], [rowtime], [LastUpdated])
-	   VALUES (src.[RowDate], [record_id], src.[SystemIdle], src.[SQLProcessUtilization], src.[OtherProcess], src.[UTC], SYSUTCDATETIME())
-	;
+	SELECT @current_start = SYSUTCDATETIME()
+	INSERT INTO [internal].[executionlog] ([collector], [StartTime])
+	VALUES (N'cpu_stats', @current_start)
+	SET @current_logitem = SCOPE_IDENTITY()
+
+	BEGIN TRY
+
+		--Calculate the number of ticks. Needed for time conversion
+		DECLARE @ts_now bigint = (SELECT [cpu_ticks]/([cpu_ticks]/[ms_ticks])FROM sys.dm_os_sys_info); 
+
+		WITH [systemhealthresult] AS /* Get only the SystemHealth events from the XEvent trace */ 
+		(	SELECT [timestamp] --Tick based time counter
+				, [record] = CONVERT(xml, [record]) --XML data
+			FROM sys.dm_os_ring_buffers 
+			WHERE [ring_buffer_type] = N'RING_BUFFER_SCHEDULER_MONITOR' 
+			AND [record] LIKE '%<SystemHealth>%'
+		), [cpustats] AS /* Parse and convert the XML values to usable columns */
+		(   SELECT [record_id] = [record].value('(./Record/@id)[1]', 'int') --The unique record_id. Used to prevent duplicates
+				, [SystemIdle] = [record].value('(./Record/SchedulerMonitorEvent/SystemHealth/SystemIdle)[1]', 'int') --Percentage of time CPU is idle
+				, [SQLProcessUtilization] = [record].value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]', 'int') --Percentage of time CPU is used by SQL Server
+				, [timestamp] --Tick based time counter
+			FROM [systemhealthresult])
+
+		MERGE [data].[cpu_stats] dest USING
+		(SELECT TOP(60) [RowDate] = CAST(DATEADD(ms, -1 * (@ts_now - [timestamp]), SYSUTCDATETIME()) as date) --Real datetime (UTC) from the [timestamp]
+					, [record_id]
+					, [SQLProcessUtilization]
+					, [SystemIdle]
+					, [OtherProcess] = 100 - [SystemIdle] - [SQLProcessUtilization] -- Only calculated for easy reporting
+					, [UTC] = CAST(DATEADD(ms, -1 * (@ts_now - [timestamp]), SYSUTCDATETIME()) as datetime2(3)) --Real datetime (UTC) from the [timestamp]
+		FROM [cpustats]
+		ORDER BY [record_id] DESC) src ON src.[record_id] = dest.[record_id] AND src.[RowDate] = dest.[RowDate]
+		WHEN NOT MATCHED THEN /* Only insert values based on the record_id. Never update anything */
+		INSERT ([RowDate], [record_id], [idle_cpu], [sql_cpu], [other_cpu], [rowtime], [LastUpdated])
+		VALUES (src.[RowDate], [record_id], src.[SystemIdle], src.[SQLProcessUtilization], src.[OtherProcess], src.[UTC], SYSUTCDATETIME())
+		;
+
+	END TRY
+	BEGIN CATCH
+		DECLARE @msg nvarchar(4000)
+		SELECT @error = ERROR_NUMBER(), @msg = ERROR_MESSAGE()
+		PRINT (@msg)
+	END CATCH
+
+	SELECT @current_end = SYSUTCDATETIME()
+	UPDATE [internal].[executionlog]
+	SET [EndTime] = @current_end
+	, [Duration_ms] =  ((CAST(DATEDIFF(S, @current_start, @current_end) AS bigint) * 1000000) + (DATEPART(MCS, @current_end)-DATEPART(MCS, @current_start))) / 1000.0
+	, [errornumber] = @@ERROR
+	WHERE [Id] = @current_logitem
+
+
 END
 GO
 
@@ -185,8 +216,8 @@ MERGE [internal].[collectors] dest
 	USING (SELECT [section], [collector], [cron] FROM [collector]) src
 		ON src.[collector] = dest.[collector]
 	WHEN NOT MATCHED THEN 
-		INSERT ([section], [collector], [cron], [lastrun])
-		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01');
+		INSERT ([section], [collector], [cron], [lastrun], [is_enabled])
+		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01', 1);
 GO
 
 

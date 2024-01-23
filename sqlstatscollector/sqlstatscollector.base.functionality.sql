@@ -126,7 +126,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal'
 DECLARE @TableName nvarchar(128) = N'collectors'
-DECLARE @TableDefinitionHash varbinary(32) = 0x22BE76B36598EB5577C110D103D67241E07BE397EA47DD48E849E403E3583A2F
+DECLARE @TableDefinitionHash varbinary(32) = 0x6DFACCC7712EAF9523470730DA67FA0B1F57D50465B6B5D9D1D010A48A5B8F56
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -155,6 +155,7 @@ BEGIN
 		[section] [nvarchar](100) NOT NULL,
 		[collector] [nvarchar](100) NOT NULL,
 		[cron] [nvarchar](255) NOT NULL,
+		[is_enabled] [bit] NOT NULL,
 		[lastrun] [datetime2](0) NOT NULL,
 		 CONSTRAINT [PK_internal_collectors] PRIMARY KEY CLUSTERED 
 			(
@@ -169,7 +170,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal'
 DECLARE @TableName nvarchar(128) = N'executionlog'
-DECLARE @TableDefinitionHash varbinary(32) = 0xBBBFCD5154993429EF29381D37B9CB81E8D9808D00E2F5E54F073C65E3C72E86
+DECLARE @TableDefinitionHash varbinary(32) = 0x432F521039C020BE1627537C4600E8CC7E92C2A9F6D04FBAE54E442DED561C49
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -199,9 +200,9 @@ BEGIN
 	CREATE TABLE [internal].[executionlog](
 		[Id] [bigint] IDENTITY(1,1) NOT NULL,
 		[collector] [nvarchar](100) NOT NULL,
-		[StartTime] [datetime2](3) NOT NULL,
-		[EndTime] [datetime2](3) NULL,
-		[Duration_ms] [bigint] NULL,
+		[StartTime] [datetime2](6) NOT NULL,
+		[EndTime] [datetime2](6) NULL,
+		[Duration_ms] [decimal](18, 3) NULL,
 		[errornumber] [int] NULL,
 		 CONSTRAINT [PK_internal_executionlog] PRIMARY KEY CLUSTERED 
 			(

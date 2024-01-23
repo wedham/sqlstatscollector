@@ -84,6 +84,8 @@ Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-01-21	Mikael Wedham		+Created v1
 2024-01-17  Mikael Wedham		+Added value generation for serverid
+2024-01-19	Mikael Wedham		+Added logging of duration
+2024-01-23	Mikael Wedham		+Added errorhandling
 *******************************************************************************/
 ALTER PROCEDURE [collect].[server_properties]
 AS
@@ -91,77 +93,105 @@ BEGIN
 PRINT('[collect].[server_properties] - Get all properties of the current server//instance')
 SET NOCOUNT ON
 
+	DECLARE @current_start datetime2(7)
+	DECLARE @current_end datetime2(7)
+	DECLARE @current_logitem int
+	DECLARE @error int = 0
+
+	SELECT @current_start = SYSUTCDATETIME()
+	INSERT INTO [internal].[executionlog] ([collector], [StartTime])
+	VALUES (N'server_properties', @current_start)
+	SET @current_logitem = SCOPE_IDENTITY()
+
 	DECLARE @FilestreamConfiguredLevel int = null
 	DECLARE @IsHadrEnabled int = null
 
 	DECLARE @v varchar(20)
 
-	SELECT @v = [internal].[GetSQLServerVersion]()
+	BEGIN TRY
 
-	IF (@v NOT IN ('2005', '2008', '2008R2'))
-	BEGIN
-	  SELECT @FilestreamConfiguredLevel = CAST(SERVERPROPERTY('FilestreamConfiguredLevel') AS int)
-		   , @IsHadrEnabled = CAST(SERVERPROPERTY('IsHadrEnabled') AS int)
-	END;
+		SELECT @v = [internal].[GetSQLServerVersion]()
 
-	MERGE  [data].[server_properties] dest
-	USING ( SELECT [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
-				 , [ServerName] = CAST(SERVERPROPERTY('ServerName') AS nvarchar(128))
-				 , [Instance] = CAST(SERVERPROPERTY('InstanceName') AS nvarchar(128))
-				 , [ComputerNamePhysicalNetBIOS] = CAST(SERVERPROPERTY('ComputerNamePhysicalNetBIOS') AS nvarchar(128))
-				 , [Edition] = CAST(SERVERPROPERTY('Edition') AS nvarchar(128))
-				 , [ProductLevel] = CAST(SERVERPROPERTY('ProductLevel') AS nvarchar(128))
-				 , [ProductVersion] = CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128))
-				 , [Collation] = CAST(SERVERPROPERTY('Collation') AS nvarchar(128))
-				 , [IsClustered] = CAST(SERVERPROPERTY('IsClustered') AS int)
-				 , [IsIntegratedSecurityOnly] = CAST(SERVERPROPERTY('IsIntegratedSecurityOnly') AS int)
-				 , [FilestreamConfiguredLevel] = @FilestreamConfiguredLevel
-				 , [IsHadrEnabled] = @IsHadrEnabled) src
-	ON dest.[MachineName] = src.[MachineName]	
-	WHEN NOT MATCHED THEN
-		INSERT ([serverid]
-		       ,[MachineName]
-			   ,[ServerName]
-			   ,[Instance]
-			   ,[ComputerNamePhysicalNetBIOS]
-			   ,[Edition]
-			   ,[ProductLevel]
-			   ,[ProductVersion]
-			   ,[Collation]
-			   ,[IsClustered]
-			   ,[IsIntegratedSecurityOnly]
-			   ,[FilestreamConfiguredLevel]
-			   ,[IsHadrEnabled]
-			   ,[LastUpdated] )
-		 VALUES
-			   (NEWID()
-			   ,[MachineName]
-			   ,[ServerName]
-			   ,[Instance]
-			   ,[ComputerNamePhysicalNetBIOS]
-			   ,[Edition]
-			   ,[ProductLevel]
-			   ,[ProductVersion]
-			   ,[Collation]
-			   ,[IsClustered]
-			   ,[IsIntegratedSecurityOnly]
-			   ,[FilestreamConfiguredLevel]
-			   ,[IsHadrEnabled]
-			   ,SYSUTCDATETIME())
-	WHEN MATCHED THEN
-		UPDATE SET 
-		   [ServerName] = src.[ServerName]
-		  ,[Instance] = src.[Instance]
-		  ,[ComputerNamePhysicalNetBIOS] = src.[ComputerNamePhysicalNetBIOS]
-		  ,[Edition] = src.[Edition]
-		  ,[ProductLevel] = src.[ProductLevel]
-		  ,[ProductVersion] = src.[ProductVersion]
-		  ,[Collation] = src.[Collation]
-		  ,[IsClustered] = src.[IsClustered]
-		  ,[IsIntegratedSecurityOnly] = src.[IsIntegratedSecurityOnly]
-		  ,[FilestreamConfiguredLevel] = src.[FilestreamConfiguredLevel]
-		  ,[IsHadrEnabled] = src.[IsHadrEnabled]
-		  ,[LastUpdated] = SYSUTCDATETIME();
+		IF (@v NOT IN ('2005', '2008', '2008R2'))
+		BEGIN
+		SELECT @FilestreamConfiguredLevel = CAST(SERVERPROPERTY('FilestreamConfiguredLevel') AS int)
+			, @IsHadrEnabled = CAST(SERVERPROPERTY('IsHadrEnabled') AS int)
+		END;
+
+		MERGE  [data].[server_properties] dest
+		USING ( SELECT [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
+					, [ServerName] = CAST(SERVERPROPERTY('ServerName') AS nvarchar(128))
+					, [Instance] = CAST(SERVERPROPERTY('InstanceName') AS nvarchar(128))
+					, [ComputerNamePhysicalNetBIOS] = CAST(SERVERPROPERTY('ComputerNamePhysicalNetBIOS') AS nvarchar(128))
+					, [Edition] = CAST(SERVERPROPERTY('Edition') AS nvarchar(128))
+					, [ProductLevel] = CAST(SERVERPROPERTY('ProductLevel') AS nvarchar(128))
+					, [ProductVersion] = CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128))
+					, [Collation] = CAST(SERVERPROPERTY('Collation') AS nvarchar(128))
+					, [IsClustered] = CAST(SERVERPROPERTY('IsClustered') AS int)
+					, [IsIntegratedSecurityOnly] = CAST(SERVERPROPERTY('IsIntegratedSecurityOnly') AS int)
+					, [FilestreamConfiguredLevel] = @FilestreamConfiguredLevel
+					, [IsHadrEnabled] = @IsHadrEnabled) src
+		ON dest.[MachineName] = src.[MachineName]	
+		WHEN NOT MATCHED THEN
+			INSERT ([serverid]
+				,[MachineName]
+				,[ServerName]
+				,[Instance]
+				,[ComputerNamePhysicalNetBIOS]
+				,[Edition]
+				,[ProductLevel]
+				,[ProductVersion]
+				,[Collation]
+				,[IsClustered]
+				,[IsIntegratedSecurityOnly]
+				,[FilestreamConfiguredLevel]
+				,[IsHadrEnabled]
+				,[LastUpdated] )
+			VALUES
+				(NEWID()
+				,[MachineName]
+				,[ServerName]
+				,[Instance]
+				,[ComputerNamePhysicalNetBIOS]
+				,[Edition]
+				,[ProductLevel]
+				,[ProductVersion]
+				,[Collation]
+				,[IsClustered]
+				,[IsIntegratedSecurityOnly]
+				,[FilestreamConfiguredLevel]
+				,[IsHadrEnabled]
+				,SYSUTCDATETIME())
+		WHEN MATCHED THEN
+			UPDATE SET 
+			[ServerName] = src.[ServerName]
+			,[Instance] = src.[Instance]
+			,[ComputerNamePhysicalNetBIOS] = src.[ComputerNamePhysicalNetBIOS]
+			,[Edition] = src.[Edition]
+			,[ProductLevel] = src.[ProductLevel]
+			,[ProductVersion] = src.[ProductVersion]
+			,[Collation] = src.[Collation]
+			,[IsClustered] = src.[IsClustered]
+			,[IsIntegratedSecurityOnly] = src.[IsIntegratedSecurityOnly]
+			,[FilestreamConfiguredLevel] = src.[FilestreamConfiguredLevel]
+			,[IsHadrEnabled] = src.[IsHadrEnabled]
+			,[LastUpdated] = SYSUTCDATETIME();
+
+	END TRY
+	BEGIN CATCH
+		DECLARE @msg nvarchar(4000)
+		SELECT @error = ERROR_NUMBER(), @msg = ERROR_MESSAGE()
+		PRINT (@msg)
+	END CATCH
+
+	SELECT @current_end = SYSUTCDATETIME()
+	UPDATE [internal].[executionlog]
+	SET [EndTime] = @current_end
+	, [Duration_ms] =  ((CAST(DATEDIFF(S, @current_start, @current_end) AS bigint) * 1000000) + (DATEPART(MCS, @current_end)-DATEPART(MCS, @current_start))) / 1000.0
+	, [errornumber] = @@ERROR
+	WHERE [Id] = @current_logitem
+
+
 END
 GO
 
@@ -227,6 +257,6 @@ MERGE [internal].[collectors] dest
 	USING (SELECT [section], [collector], [cron] FROM [collector]) src
 		ON src.[collector] = dest.[collector]
 	WHEN NOT MATCHED THEN 
-		INSERT ([section], [collector], [cron], [lastrun])
-		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01');
+		INSERT ([section], [collector], [cron], [lastrun], [is_enabled])
+		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01', 1);
 GO

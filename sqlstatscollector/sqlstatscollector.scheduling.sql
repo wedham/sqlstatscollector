@@ -35,7 +35,7 @@ EXEC @ReturnCode = dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Run the colle
 		@retry_interval=0, 
 		@os_run_priority=0, @subsystem=N'TSQL', 
 		@command=N'EXEC [collect].[run]', 
-		@database_name=N'sqlstatscollector', 
+		@database_name=N'$(SQLCMDDBNAME)', 
 		@flags=0
 
 EXEC @ReturnCode = dbo.sp_update_job @job_id = @jobId, @start_step_id = 1

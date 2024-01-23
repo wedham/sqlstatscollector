@@ -1,0 +1,25 @@
+SET NOCOUNT ON 
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+RAISERROR(N'Checking for database $(DatabaseName)', 10, 1) WITH NOWAIT
+GO
+
+IF (NOT EXISTS (SELECT * FROM sys.sysdatabases WHERE name = '$(DatabaseName)')) 
+BEGIN
+    EXEC ('CREATE DATABASE [$(DatabaseName)]')
+END
+GO
+
+ALTER DATABASE [$(DatabaseName)] SET RECOVERY SIMPLE WITH NO_WAIT
+GO
+
+GO
+USE [$(DatabaseName)]
+GO
+ALTER AUTHORIZATION ON DATABASE::[$(DatabaseName)] TO [sa]
+GO
+
