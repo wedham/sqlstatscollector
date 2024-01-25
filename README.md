@@ -12,3 +12,10 @@
 - the web UI - lets you add instances for collection to the central database
 - the powershell - script for collecting all data
 - the reports - a view of the statistics and potential issues in the database
+
+## old project parts (to be removed)
+
+- database
+- helperscripts
+- powershell
+- scheduling
