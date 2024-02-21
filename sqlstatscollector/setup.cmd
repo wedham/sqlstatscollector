@@ -6,9 +6,9 @@ SET database=sqlstatscollector
 
 sqlcmd -d master -E -C -S %sqlserver% -v DatabaseName = "%database%" -i _initialize.sql 
 
-sqlcmd -d %database% -E -C -S %sqlserver% -i cron.sql 
-
 sqlcmd -d %database% -E -C -S %sqlserver% -i sqlstatscollector.base.functionality.sql 
+
+sqlcmd -d %database% -E -C -S %sqlserver% -i cron.sql 
 
 sqlcmd -d %database% -E -C -S %sqlserver% -i sqlstatscollector.collector.server_properties.sql 
 sqlcmd -d %database% -E -C -S %sqlserver% -i sqlstatscollector.collector.server_stats.sql 

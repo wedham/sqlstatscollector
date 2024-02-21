@@ -60,7 +60,7 @@ function Copy-AllTableData {
         foreach ($row in $datacollectors) { 
 
             $procedurename = "[transfer]." + $row.collector
-            $tablename = "[data]." + $row.collector
+            $tablename = "[incoming]." + $row.collector
             "Transferring data to " + $tablename + " using " + $procedurename
 
             $SqlCommand = New-Object System.Data.SqlClient.SqlCommand
