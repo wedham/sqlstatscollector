@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'job_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0xA497C157E24F569965B7A1DD58D31C8CE175A041D0256E1436970B8AA90CD36D
+DECLARE @TableDefinitionHash varbinary(32) = 0x475361663745113A486C98A4C2736B1178A5429966BCA2D1FDEEFF1543710916
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -57,6 +57,10 @@ BEGIN
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 

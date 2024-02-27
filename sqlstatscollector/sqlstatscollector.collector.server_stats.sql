@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'server_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xB3F39C7A784CAECF1D8A036F62659DDA59234D47DDE8139EA0E14DE1A098F0DA
+DECLARE @TableDefinitionHash varbinary(32) = 0x5C1C8DCF38D4E21A86EFA7918FA96778B2AF8A4FBD75FF6AE6D9621B3224B7A1
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -49,11 +49,15 @@ BEGIN
 			) ON [PRIMARY]	
 	) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal_data'
 DECLARE @TableName nvarchar(128) = N'server_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xBEA40ADC7BED60658E0F145C8B1293B1769D0708D73F9EA212C1963C8952F18C
+DECLARE @TableDefinitionHash varbinary(32) = 0x5D8BE6AB5E465AAA5B6B4F640903EB49EF8D8271E066A0AE9644339996CAB4A8
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -85,6 +89,10 @@ BEGIN
 	) ON [PRIMARY]
 END
 
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+GO
 
 
 

@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'databasefile_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xADD974FE74859E382063032C53ED439DA4C4E55DCBBCBF989B61C054549B5263
+DECLARE @TableDefinitionHash varbinary(32) = 0xB24F80E7FBD33608914B36E241A4E7C75B50FBC923263123D56264F31DD69C14
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -59,11 +59,15 @@ BEGIN
 			) ON [PRIMARY]	
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal_data'
 DECLARE @TableName nvarchar(128) = N'databasefile_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0x3E4E10305C6101C93A06EF659BB353C6BBA206DFC2C11E628D8479B191BB3578
+DECLARE @TableDefinitionHash varbinary(32) = 0x7D5FA5F906B7D89968013D823145724C69407B68642576788008AD843D1159E3
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -109,7 +113,10 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+GO
 
 
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[databasefile_stats] ******/', 10, 1) WITH NOWAIT

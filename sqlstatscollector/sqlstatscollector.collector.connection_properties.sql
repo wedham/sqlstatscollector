@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'connection_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x0ACAB1A8E2EB5DC5308133214D5E9888A4E21AB5CAC0C843457E768C9B60A141
+DECLARE @TableDefinitionHash varbinary(32) = 0x01A27053B8A1C3310AB298E2161E0824061CCA85A10A2C3D2C4F311C289E98CC
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -47,6 +47,10 @@ BEGIN
 	) ON [PRIMARY]
 END
 
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+GO
 
 
 
@@ -74,6 +78,7 @@ Date		Name				Description
 2023-08-09	Mikael Wedham		+Created v1
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
+2024-02-26	Mikael Wedham		+Removed time filter from selection due to UTC issues
 *******************************************************************************/
 ALTER PROCEDURE [collect].[connection_properties]
 AS
@@ -136,7 +141,7 @@ SET NOCOUNT ON
 		FROM ParsedXEVENT
 		WHERE DB_NAME([database_id]) IS NOT NULL 
 		  AND [program_name] <> 'Microsoft SQL Server Management Studio - Transact-SQL IntelliSense'
-		  AND [last_seen] >= @previous_collection_date
+		  --AND [last_seen] >= @previous_collection_date
 		GROUP BY DB_NAME([database_id]), [host_name], [username], [program_name]
 		)
 

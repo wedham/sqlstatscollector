@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'server_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0xFEC8ECA4B3383EF19EDA4C43C0B84B94D7EAC39192AA97019B94F602F7D2C6DD
+DECLARE @TableDefinitionHash varbinary(32) = 0x5DEB47875A3C8615384B1E74E3FA38EA9E831756C5F0199B87EE8AB36AB71B9C
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -59,6 +59,10 @@ BEGIN
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 

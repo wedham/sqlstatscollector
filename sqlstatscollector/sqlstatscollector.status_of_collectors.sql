@@ -26,6 +26,7 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-01-23	Mikael Wedham		+Created v1
+2024-02-26	Mikael Wedham		+Increased max event count
 *******************************************************************************/
 ALTER PROCEDURE [internal].[collector_status]
 ( @collector varchar(100)
@@ -48,12 +49,14 @@ SET NOCOUNT ON
 				ADD EVENT sqlserver.lock_acquired(
 					ACTION(sqlserver.client_app_name,sqlserver.client_hostname,sqlserver.nt_username,sqlserver.session_nt_username,sqlserver.username)
 					WHERE ([resource_type]=(2) AND [database_id]>(4) AND [sqlserver].[is_system]=(0) AND [owner_type]=(4)))
-				ADD TARGET package0.ring_buffer(SET max_events_limit=(8192))
+				ADD TARGET package0.ring_buffer(SET max_events_limit=(131072))
 				WITH (EVENT_RETENTION_MODE=ALLOW_SINGLE_EVENT_LOSS
 					 ,MAX_DISPATCH_LATENCY=10 SECONDS
 					 ,TRACK_CAUSALITY=OFF
 					 ,STARTUP_STATE=ON)
 			END
+
+			WAITFOR DELAY '0:00:03';
 
 			SELECT @session_is_running = IIF(running.[name] IS NULL, 0, 1)
 			FROM sys.server_event_sessions es LEFT OUTER JOIN sys.dm_xe_sessions running

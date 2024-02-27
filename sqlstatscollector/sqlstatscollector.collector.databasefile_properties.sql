@@ -11,7 +11,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'databasefile_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x3CE63596CF0A16CFDF4B3344FEAEB8D67392124B4BD1566213BDEC952BD72CAC
+DECLARE @TableDefinitionHash varbinary(32) = 0x9316C54921A35559D38BC79FD7BC7CB923264E69D6B047A20CFCA94D29B5F9F8
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -58,6 +58,10 @@ BEGIN
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[databasefile_properties] ******/', 10, 1) WITH NOWAIT

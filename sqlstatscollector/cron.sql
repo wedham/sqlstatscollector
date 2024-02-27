@@ -48,6 +48,7 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-01-15	Mikael Wedham		+Created v1
+2024-02-27	Mikael Wedham		+Added 2005-2014 compatibility
 *******************************************************************************/
 ALTER FUNCTION [internal].[TableMetadataChecker]
 (@schemaname nvarchar(128), @tablename nvarchar(128), @tabledefinitionhash varbinary(32))
@@ -58,7 +59,7 @@ WITH ListOfTableMetadata AS
     (
         SELECT [schemaname] = @schemaname
 		     , [tablename] = @tablename
-             , [fullname] = CONCAT('[', schemainfo.[name], '].[', tableinfo.[name], ']')
+             , [fullname] = '[' + schemainfo.[name] + '].[' + tableinfo.[name] + ']'
              , [columndata] = CAST((SELECT columnname = columninfo.[name]
 										 , columninfo.[system_type_id]
 										 , columninfo.[max_length]
@@ -81,7 +82,7 @@ WITH ListOfTableMetadata AS
 		UNION ALL
         SELECT [schemaname] = @schemaname
 		     , [tablename] = @tablename
-			 , [fullname] = CAST(CONCAT('[', @schemaname, '].[', @tablename, ']') as nvarchar(256))
+			 , [fullname] = CAST('[' + @schemaname + '].[' + @tablename + ']' as nvarchar(256))
 			 , [columndata] = CAST(NULL as XML)
 			 , [TableExists] = 0
     ), CurrentTableDefinition AS
@@ -89,7 +90,7 @@ WITH ListOfTableMetadata AS
 		SELECT TOP(1) [SchemaName] = [schemaname]
 			 , [TableName] = [tablename]
 			 , [FullName] = [fullname]
-			 , [TableDefinitionHash] = CAST(CASE WHEN [TableExists] = 0 THEN NULL ELSE HASHBYTES('SHA2_256', (SELECT fullname, columndata FROM (VALUES(NULL))keydata(x) FOR JSON AUTO)) END AS varbinary(32))
+			 , [TableDefinitionHash] = CAST(CASE WHEN [TableExists] = 0 THEN NULL ELSE HASHBYTES('SHA2_256', (SELECT fullname, columndata FROM (VALUES(NULL))keydata(x) FOR XML AUTO)) END AS varbinary(32))
 			 , [TableExists]  = CAST([TableExists] AS int)
 		FROM ListOfTableMetadata
 		ORDER BY [TableExists] DESC
@@ -168,7 +169,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'cron'
 DECLARE @TableName nvarchar(128) = N'Numbers'
-DECLARE @TableDefinitionHash varbinary(32) = 0x3593C0AD8F379BC0767E7D2EF39B18A8800ABD510BBFA05FB99FCB5730B1C3EB
+DECLARE @TableDefinitionHash varbinary(32) = 0x4B7255B38744ED8B49E00ED404793D69DD2CF2CDB4D322317579BEC03EA0553C
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -200,6 +201,11 @@ BEGIN
 		) ON [PRIMARY]
 	) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
 GO
 
 
@@ -208,7 +214,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'cron'
 DECLARE @TableName nvarchar(128) = N'Dates'
-DECLARE @TableDefinitionHash varbinary(32) = 0xDE222BAA5A078374A4523E9B0FAB140A5AB41B0C5F0DFC8A3E6D50C59520B276
+DECLARE @TableDefinitionHash varbinary(32) = 0x0B8C6F1DCC18D642B5E8594D5AD2DEC7D301CF0E48399C77F78F83229713251B
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -245,6 +251,10 @@ BEGIN
 		) ON [PRIMARY]
 	) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 /****** End Section:  Tables ******/

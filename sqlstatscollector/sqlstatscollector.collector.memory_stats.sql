@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'memory_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xEEDB00148913ACCA1D2506F98A964C08A21A6A2583C4CFA5280EE6D813476CD6
+DECLARE @TableDefinitionHash varbinary(32) = 0xD78B6EEAF8DD34B2C061BBCFF39A4575AF9E5FB8B9B0FD89FF17609608C24875
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -54,6 +54,10 @@ BEGIN
 			) ON [PRIMARY]	
 	) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 

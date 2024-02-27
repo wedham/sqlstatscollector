@@ -29,6 +29,13 @@ BEGIN
 END
 GO
 
+RAISERROR(N'/****** Object:  Schema [internal] ******/', 10, 1) WITH NOWAIT
+IF (NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'internal')) 
+BEGIN
+    EXEC ('CREATE SCHEMA [internal] AUTHORIZATION [dbo]')
+END
+GO
+
 RAISERROR(N'/****** Object:  Schema [transfer] ******/', 10, 1) WITH NOWAIT
 IF (NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'transfer')) 
 BEGIN
@@ -121,12 +128,91 @@ END
 GO
 
 
+/****** Object:  Table-Value Function  [internal].[TableMetadataChecker] ******/
+GO
+
+IF OBJECT_ID(N'[internal].[TableMetadataChecker]', N'IF') IS NULL
+BEGIN
+	EXEC ('CREATE FUNCTION [internal].[TableMetadataChecker] () RETURNS TABLE AS RETURN SELECT x = NULL')
+END
+GO
+
+/*******************************************************************************
+--Copyright (c) 2024 Mikael Wedham (MIT License)
+   -----------------------------------------
+   [internal].[TableMetadataChecker]
+   -----------------------------------------
+   Calculates a checksum of the definition of a table.
+   The checksum column is returned as a varbinary(32)
+
+Date		Name				Description
+----------	-------------		-----------------------------------------------
+2024-01-15	Mikael Wedham		+Created v1
+*******************************************************************************/
+ALTER FUNCTION [internal].[TableMetadataChecker]
+(@schemaname nvarchar(128), @tablename nvarchar(128), @tabledefinitionhash varbinary(32))
+RETURNS TABLE
+AS
+RETURN
+WITH ListOfTableMetadata AS
+    (
+        SELECT [schemaname] = @schemaname
+		     , [tablename] = @tablename
+             , [fullname] = '[' + schemainfo.[name] + '].[' + tableinfo.[name] + ']'
+             , [columndata] = CAST((SELECT columnname = columninfo.[name]
+										 , columninfo.[system_type_id]
+										 , columninfo.[max_length]
+										 , columninfo.[precision]
+										 , columninfo.[scale]
+										 , columninfo.[is_nullable]
+										 , collation_name = ISNULL(columninfo.[collation_name],N'')
+									FROM sys.columns columninfo 
+									WHERE columninfo.[object_id] = tableinfo.[object_id]
+									ORDER BY columnname
+									FOR XML AUTO, ROOT(N'columns')) AS XML
+								   )
+			, [TableExists] = 1
+		FROM sys.objects tableinfo 
+        INNER JOIN sys.schemas schemainfo 
+            ON tableinfo.[schema_id] = schemainfo.[schema_id]
+        WHERE tableinfo.[type] = 'U' 
+		  AND schemainfo.[name] = @schemaname
+		  AND tableinfo.[name] = @tablename
+		UNION ALL
+        SELECT [schemaname] = @schemaname
+		     , [tablename] = @tablename
+			 , [fullname] = CAST('[' + @schemaname + '].[' + @tablename + ']' as nvarchar(256))
+			 , [columndata] = CAST(NULL as XML)
+			 , [TableExists] = 0
+    ), CurrentTableDefinition AS
+	(
+		SELECT TOP(1) [SchemaName] = [schemaname]
+			 , [TableName] = [tablename]
+			 , [FullName] = [fullname]
+			 , [TableDefinitionHash] = CAST(CASE WHEN [TableExists] = 0 THEN NULL ELSE HASHBYTES('SHA2_256', (SELECT fullname, columndata FROM (VALUES(NULL))keydata(x) FOR XML AUTO)) END AS varbinary(32))
+			 , [TableExists]  = CAST([TableExists] AS int)
+		FROM ListOfTableMetadata
+		ORDER BY [TableExists] DESC
+	)
+		SELECT [SchemaName] = [SchemaName]
+			 , [TableName] = [TableName]
+			 , [FullName] = [FullName]
+			 , [TableDefinitionHash] = [TableDefinitionHash]
+			 , [TableExists] 
+			 , [TableHasChanged] = CAST(CASE WHEN ISNULL(@tabledefinitionhash, 0x00) = [TableDefinitionHash] OR [TableExists] = 0 THEN 0 ELSE 1 END AS int)
+		FROM CurrentTableDefinition
+GO
+
+
+
+
+
 RAISERROR(N'/****** Object:  Table [internal].[collectors] ******/', 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal'
 DECLARE @TableName nvarchar(128) = N'collectors'
-DECLARE @TableDefinitionHash varbinary(32) = 0x6DFACCC7712EAF9523470730DA67FA0B1F57D50465B6B5D9D1D010A48A5B8F56
+DECLARE @TableDefinitionHash varbinary(32) = 0x667F123B3437DD7D40137F3892380EA62BBD8A66B0D588EE20BFED3DE6546754
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -163,6 +249,10 @@ BEGIN
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 RAISERROR(N'/****** Object:  Table [internal].[executionlog] ******/', 10, 1) WITH NOWAIT
@@ -170,7 +260,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal'
 DECLARE @TableName nvarchar(128) = N'executionlog'
-DECLARE @TableDefinitionHash varbinary(32) = 0x432F521039C020BE1627537C4600E8CC7E92C2A9F6D04FBAE54E442DED561C49
+DECLARE @TableDefinitionHash varbinary(32) = 0x791191304DF49CD6686A355781A07B272603EF2A04F38F17F97DFEE5607F467E
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -210,6 +300,10 @@ BEGIN
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 RAISERROR(N'/****** Object:  StoredProcedure [internal].[collectors_for_transfer] ******/', 10, 1) WITH NOWAIT

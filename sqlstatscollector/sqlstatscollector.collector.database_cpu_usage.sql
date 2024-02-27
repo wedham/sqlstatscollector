@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'database_cpu_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0x592E310ECA1E953BBEC22094B4FA1D3FF4988C9DE276FB2F4F51D771B3E84275
+DECLARE @TableDefinitionHash varbinary(32) = 0x1E541A8676195F7EE861FADC31DC81C10469D4256BD7506DFCD9138D2D37FE10
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -52,11 +52,15 @@ BEGIN
 	) ON [PRIMARY]
 
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal_data'
 DECLARE @TableName nvarchar(128) = N'database_cpu_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0x553EF615540E36C4E92FF20B0D7A49AD1DDD03CB699CD7E7AFE2996457DEBF9F
+DECLARE @TableDefinitionHash varbinary(32) = 0x6DCB5080541B098FF5E6868C9773C62B041D60D61962E8AAB3F435175F5AD537
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -88,6 +92,10 @@ BEGIN
 		[cpu_time_ms] [decimal](18, 3) NOT NULL
 	) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[database_cpu_usage] ******/', 10, 1) WITH NOWAIT

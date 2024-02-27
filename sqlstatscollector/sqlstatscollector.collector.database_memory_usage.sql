@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'database_memory_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0x840AD75FCB6880741EA52ADFE4F946CEBC965D7560B89714264F20C6214CEEFF
+DECLARE @TableDefinitionHash varbinary(32) = 0x3957CC2F94631A92275F7983A91F52C5158E45033E808CF5FD5F0D5A865EC29D
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -53,6 +53,10 @@ BEGIN
 	) ON [PRIMARY]
 END
 
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+GO
 
 
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[database_memory_usage] ******/', 10, 1) WITH NOWAIT

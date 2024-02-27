@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'availability_group_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x2E501F7E4FEA796EA596DFC30142A48B501C18F92E089FC70E8A80C36287E954
+DECLARE @TableDefinitionHash varbinary(32) = 0x0B1BCD5EA5E6DF03B66C38155F87188D1029ED6784CFD1004006BE15FFAE1582
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -51,6 +51,10 @@ BEGIN
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[availability_group_properties] ******/', 10, 1) WITH NOWAIT

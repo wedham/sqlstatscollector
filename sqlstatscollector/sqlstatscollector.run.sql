@@ -47,8 +47,8 @@ SET NOCOUNT ON
 	INSERT INTO #collectors(collector)
 	SELECT c.collector
 	FROM internal.collectors c
-	WHERE cron.GetNext(c.cron, c.lastrun) < SYSUTCDATETIME()
-	  AND [is_enabled] = 1
+	WHERE [is_enabled] = 1
+	  AND cron.GetNext(c.cron, c.lastrun) < SYSUTCDATETIME()
 
 	WHILE EXISTS (SELECT * FROM #collectors)
 	BEGIN 

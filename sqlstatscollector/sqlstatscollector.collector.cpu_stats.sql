@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'cpu_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0x22EDD24AEC1AF0B56AA239C443B03D4C40E4D6119688FF51751D37CC63AC7D5B
+DECLARE @TableDefinitionHash varbinary(32) = 0x622595CC476FA2BBD73DFE073FCDFD44F70FCDED8F199512D1AE8315AFD870ED
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -53,6 +53,10 @@ BEGIN
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
 
 
