@@ -379,6 +379,43 @@ GO
 /****** Section:  User Defined Functions ******/
 GO
 
+
+/*******************************************************************************
+--Copyright (c) 2022 Mikael Wedham (MIT License)
+   -----------------------------------------
+    [internal].[STRING_SPLIT]
+   -----------------------------------------
+   Emolates the functionality of STRING_SPLIT for databases with their
+   COMPAT LEVEL set to lower than 130
+
+Date		Name				Description
+----------	-------------		-----------------------------------------------
+2024-02-28	Mikael Wedham		+Created v1
+*******************************************************************************/
+CREATE FUNCTION [internal].[STRING_SPLIT]
+(
+   @string     NVARCHAR(1000),
+   @separator  NVARCHAR(1)
+)
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+   RETURN 
+   (  
+      SELECT [value] = derivedtable.i.value('(./text())[1]', 'nvarchar(1000)')
+      FROM 
+      ( 
+        SELECT x = CONVERT(XML, '<i>' 
+          + REPLACE(@string, @separator, '</i><i>') 
+          + '</i>').query('.')
+      ) AS a CROSS APPLY x.nodes('i') AS derivedtable(i)
+   );
+GO
+
+
+
+
+
 /****** Object:  UserDefinedFunction [cron].[NormalizeExpression] ******/
 GO
 
@@ -504,7 +541,7 @@ BEGIN
 	SELECT @splitter = CHARINDEX('-', @cron)
 
 	--If separator is duplicated or missing, this is not a correct cron part : exit.
-	IF ( SELECT COUNT(*) FROM STRING_SPLIT(@cron, '-')) <> 2 OR (@splitter = 0)
+	IF ( SELECT COUNT(*) FROM [internal].[STRING_SPLIT](@cron, '-')) <> 2 OR (@splitter = 0)
 	BEGIN
 	   RETURN
 	END
@@ -569,7 +606,7 @@ BEGIN
 	SELECT @splitter = CHARINDEX('/', @cron)
 
 	--If separator is duplicated or missing, this is not a correct cron part : exit.
-	IF ( SELECT COUNT(*) FROM STRING_SPLIT(@cron, '/')) <> 2 OR (@splitter = 0)
+	IF ( SELECT COUNT(*) FROM [internal].[STRING_SPLIT](@cron, '/')) <> 2 OR (@splitter = 0)
 	BEGIN
 	   RETURN
 	END
@@ -718,7 +755,7 @@ RETURN
 (
  --Return a distinct list of numbers that match the aggregated cron segment
  SELECT DISTINCT s.number  
- FROM STRING_SPLIT(@cron, ',') p CROSS APPLY [cron].[internal_ParseFieldPart](p.value, @min, @max) s
+ FROM [internal].[STRING_SPLIT](@cron, ',') p CROSS APPLY [cron].[internal_ParseFieldPart](p.value, @min, @max) s
 )
 
 GO

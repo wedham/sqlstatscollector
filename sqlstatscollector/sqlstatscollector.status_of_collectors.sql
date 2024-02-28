@@ -58,7 +58,7 @@ SET NOCOUNT ON
 
 			WAITFOR DELAY '0:00:03';
 
-			SELECT @session_is_running = IIF(running.[name] IS NULL, 0, 1)
+			SELECT @session_is_running = CASE WHEN running.[name] IS NULL THEN 0 ELSE 1 END
 			FROM sys.server_event_sessions es LEFT OUTER JOIN sys.dm_xe_sessions running
 			  ON es.[name] = running.[name]
 			WHERE es.[name] = N'sqlstatscollector-connection_properties'
