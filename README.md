@@ -1,8 +1,9 @@
 # sqlstatscollector
 
 ## Project for collecting statistics on a SQL Server instance
-The current full code version works on SQL Server 2012 and forward.
-For SQL Server 2005/2008/2008 R2 see the code in the Legacy folder.
+The current full code version works on SQL Server 2016 and forward.
+For SQL Server 2005/2008/2008 R2/2012/2014 see the code in the Legacy folder.
+Work is in progress to make all code work in precious versions too.
 
 ## Project parts
 
