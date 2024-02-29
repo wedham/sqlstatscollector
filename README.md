@@ -9,16 +9,16 @@ The current full code version works on SQL Server 2012 and forward.
 
 ## Project parts
 
-### sqlstatscollector
+### sqlstatscollector - the database
 
 This is the folder of the instance database. This database should exist on all SQL Server instances that should use data collection.
 
 ### dataconsolidation
 
-The code in this directory is installed on the central server, where the sqlstatsmain database is located. 
-Currently there is a Powershell script that connects to all 
+The code in this directory is installed on the central server, where the sqlstatsmain database is located.
+Currently there is a Powershell script that connects to all
 
-## Project parts to be created:
+## Project parts to be created
 
 - the central database - a database that collects all instances data
 - the web UI - lets you add instances for collection to the central database
