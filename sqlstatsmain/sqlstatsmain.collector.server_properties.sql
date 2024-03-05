@@ -150,3 +150,16 @@ BEGIN
 END
 GO
 
+
+RAISERROR(N'Adding collector to [internal].[collectors]', 10, 1) WITH NOWAIT
+GO
+
+WITH collector ([section], [collector], [cron]) AS
+(SELECT 'core', 'server_properties', '0 6 * * *')
+MERGE [internal].[collectors] dest
+	USING (SELECT [section], [collector], [cron] FROM [collector]) src
+		ON src.[collector] = dest.[collector]
+	WHEN NOT MATCHED THEN 
+		INSERT ([section], [collector], [cron], [lastrun], [is_enabled])
+		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01', 1);
+GO
