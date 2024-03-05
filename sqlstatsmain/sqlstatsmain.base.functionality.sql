@@ -29,6 +29,13 @@ BEGIN
 END
 GO
 
+RAISERROR(N'/****** Object:  Schema [transfer] ******/', 10, 1) WITH NOWAIT
+IF (NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'transfer')) 
+BEGIN
+    EXEC ('CREATE SCHEMA [transfer] AUTHORIZATION [dbo]')
+END
+GO
+
 RAISERROR(N'/****** Object:  Schema [validate] ******/', 10, 1) WITH NOWAIT
 IF (NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'validate')) 
 BEGIN
@@ -223,7 +230,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal'
 DECLARE @TableName nvarchar(128) = N'sqlserverinstances'
-DECLARE @TableDefinitionHash varbinary(32) = 0x432F521039C020BE1627537C4600E8CC7E92C2A9F6D04FBAE54E442DED561C49
+DECLARE @TableDefinitionHash varbinary(32) = 0x75E3F30A67C83149239CA686554914A5FD9878E6DAC8564974BA9663019DE066
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
