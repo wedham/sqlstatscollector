@@ -13,6 +13,13 @@ The current full code version works on SQL Server 2012 and forward.
 
 This is the folder of the instance database. This database should exist on all SQL Server instances that should use data collection.
 
+To install the database you have the option to run
+
+- setup.cmd - Will install the database on the local server if you don't edit the file and change the variable on line 4 ```SET sqlserver=.```
+- setup.ps1 - Will by default install to the local server but can be changed by the parameter SQLServer that takes server names in an array ```.\setup.ps1 -SQLServer 'server1','server2'```
+
+The agent job to collect data is created disabled. To collect data you have to enable the agent job
+
 ### dataconsolidation
 
 The code in this directory is installed on the central server, where the sqlstatsmain database is located.
