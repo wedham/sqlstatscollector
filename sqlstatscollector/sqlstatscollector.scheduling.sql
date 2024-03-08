@@ -4,15 +4,18 @@ GO
 DECLARE @ReturnCode INT
 SELECT @ReturnCode = 0
 
-IF NOT EXISTS (SELECT name FROM dbo.syscategories WHERE name=N'sqlstatscollector' AND category_class=1)
+IF NOT EXISTS (SELECT [name] FROM [dbo].[syscategories] WHERE [name] = N'sqlstatscollector' AND [category_class] = 1)
 BEGIN
-	EXEC @ReturnCode = dbo.sp_add_category @class=N'JOB', @type=N'LOCAL', @name=N'sqlstatscollector'
+	EXEC @ReturnCode = [dbo].[sp_add_category] @class=N'JOB', @type=N'LOCAL', @name=N'sqlstatscollector'
 END
 
-EXEC msdb.dbo.sp_delete_job @job_name = N'Data collection for [sqlstatscollector]'
+IF EXISTS (SELECT [name] FROM [dbo].[sysjobs] WHERE [name] = 'Data collection for [sqlstatscollector]')
+BEGIN
+    EXEC [dbo].[sp_delete_job] @job_name = N'Data collection for [sqlstatscollector]'
+END
 
 DECLARE @jobId BINARY(16)
-EXEC @ReturnCode =  dbo.sp_add_job @job_name=N'Data collection for [sqlstatscollector]', 
+EXEC @ReturnCode =  [dbo].[sp_add_job] @job_name=N'Data collection for [sqlstatscollector]', 
 		@enabled=1, 
 		@notify_level_eventlog=0, 
 		@notify_level_email=0, 
@@ -24,7 +27,7 @@ EXEC @ReturnCode =  dbo.sp_add_job @job_name=N'Data collection for [sqlstatscoll
 		@owner_login_name=N'sa',
 		@job_id = @jobId OUTPUT
 
-EXEC @ReturnCode = dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Run the collection PROCEDURE', 
+EXEC @ReturnCode = [dbo].[sp_add_jobstep] @job_id=@jobId, @step_name=N'Run the collection PROCEDURE', 
 		@step_id=1, 
 		@cmdexec_success_code=0, 
 		@on_success_action=1, 
@@ -38,9 +41,9 @@ EXEC @ReturnCode = dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Run the colle
 		@database_name=N'sqlstatscollector', 
 		@flags=0
 
-EXEC @ReturnCode = dbo.sp_update_job @job_id = @jobId, @start_step_id = 1
+EXEC @ReturnCode = [dbo].[sp_update_job] @job_id = @jobId, @start_step_id = 1
 
-EXEC @ReturnCode = dbo.sp_add_jobschedule @job_id=@jobId, @name=N'Collection Schedule for [sqlstatscollector]', 
+EXEC @ReturnCode = [dbo].[sp_add_jobschedule] @job_id=@jobId, @name=N'Collection Schedule for [sqlstatscollector]', 
 		@enabled=1, 
 		@freq_type=4, 
 		@freq_interval=1, 
@@ -53,9 +56,9 @@ EXEC @ReturnCode = dbo.sp_add_jobschedule @job_id=@jobId, @name=N'Collection Sch
 		@active_start_time=0, 
 		@active_end_time=235959
 
-EXEC @ReturnCode = dbo.sp_add_jobserver @job_id = @jobId, @server_name = N'(local)'
+EXEC @ReturnCode = [dbo].[sp_add_jobserver] @job_id = @jobId, @server_name = N'(local)'
 
-EXEC @ReturnCode = dbo.sp_update_job @job_id=@jobId, @enabled=0
+EXEC @ReturnCode = [dbo].[sp_update_job] @job_id=@jobId, @enabled=0
 
 GO
 
