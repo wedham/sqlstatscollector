@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'availability_group_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x54EFC9539D5B7D50B87B306D07EB3D60A488516B708CB2BA2FA0E8360B145B55
+DECLARE @TableDefinitionHash varbinary(32) = 0x91F35DC30BD4C4D5B4B891EB27C075ADBF0466AD00E71DD87431B87BDCFEBBD7
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -38,16 +38,30 @@ BEGIN
 	SELECT @msg = N'Creating ' + @FullName
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[availability_group_properties](
+		[database_id] [int] NOT NULL,
+		[replica_id] [uniqueidentifier] NOT NULL,
 		[group_id] [uniqueidentifier] NOT NULL,
-		[name] [nvarchar](128) NOT NULL,
-		[primary_replica] [nvarchar](128) NOT NULL,
-		[recovery_health_desc] [nvarchar](60) NULL,
+		[group_database_id] [uniqueidentifier] NOT NULL,
+		[availability_group_name] [nvarchar](128) NOT NULL,
+		[is_local] [bit] NOT NULL,
+		[is_primary_replica] [bit] NOT NULL,
+		[primary_replica_name] [nvarchar](128) NOT NULL,
+		[is_suspended] [bit] NOT NULL,
+		[synchronization_state] [nvarchar](60) NULL,
+		[synchronization_state_desc] [nvarchar](60) NULL,
+		[synchronization_health] [nvarchar](60) NULL,
 		[synchronization_health_desc] [nvarchar](60) NULL,
+		[is_failover_ready] [bit] NOT NULL,
+		[redo_queue_size] [bigint] NOT NULL,
+		[redo_rate] [bigint] NOT NULL,
+		[last_commit_time] [datetime] NOT NULL,
+		[EstimatedRecoveryTimeObjective] [nvarchar](20) NOT NULL,
+		[EstimatedRecoveryPointObjective] [nvarchar](20) NOT NULL,
 		[LastUpdatedUTC] [datetime2](7) NOT NULL,
 		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_availability_group_properties] PRIMARY KEY CLUSTERED 
 			(
-				[group_id] ASC
+				[replica_id] ASC
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
@@ -80,6 +94,8 @@ Date		Name				Description
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-04-01	Mikael Wedham		Added replica state information
+2026-05-25	Mikael Wedham		Changed collection to all rows 
 *******************************************************************************/
 ALTER PROCEDURE [collect].[availability_group_properties]
 AS
@@ -97,12 +113,26 @@ SET NOCOUNT ON
 	VALUES (N'availability_group_properties', @current_start)
 	SET @current_logitem = SCOPE_IDENTITY()
 
-	DECLARE @ag_info TABLE ([group_id] uniqueidentifier
-						, [name] nvarchar(128)
-						, [primary_replica] nvarchar(128)
-						, [recovery_health_desc] nvarchar(60)
-						, [synchronization_health_desc] nvarchar(60)
-						,	[LastUpdated] [datetime2](7) NOT NULL
+	DECLARE @ag_info TABLE ([database_id] [int] NOT NULL,
+		[replica_id] [uniqueidentifier] NOT NULL,
+		[group_id] [uniqueidentifier] NOT NULL,
+		[group_database_id] [uniqueidentifier] NOT NULL,
+		[availability_group_name] [nvarchar](128) NOT NULL,
+		[is_local] [bit] NOT NULL,
+		[is_primary_replica] [bit] NOT NULL,
+		[primary_replica_name] [nvarchar](128) NOT NULL,
+		[is_suspended] [bit] NOT NULL,
+		[synchronization_state] [nvarchar](60) NULL,
+		[synchronization_state_desc] [nvarchar](60) NULL,
+		[synchronization_health] [nvarchar](60) NULL,
+		[synchronization_health_desc] [nvarchar](60) NULL,
+		[is_failover_ready] [bit] NOT NULL,
+		[redo_queue_size] [bigint] NOT NULL,
+		[redo_rate] [bigint] NOT NULL,
+		[last_commit_time] [datetime] NOT NULL,
+		[EstimatedRecoveryTimeObjective] [nvarchar](20) NOT NULL,
+		[EstimatedRecoveryPointObjective] [nvarchar](20) NOT NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL
 							)
 
 	DECLARE @v varchar(20)	
@@ -113,30 +143,57 @@ SET NOCOUNT ON
 
 		IF (@v NOT IN ('2005', '2008', '2008R2'))
 		BEGIN
-			INSERT INTO @ag_info([group_id], [name], [primary_replica], [recovery_health_desc], [synchronization_health_desc], [LastUpdated])
-			SELECT ag.group_id
-				, ag.name
-				, ags.primary_replica
-				, recovery_health_desc = ISNULL(ags.primary_recovery_health_desc, ags.secondary_recovery_health_desc)
-				, ags.synchronization_health_desc
-				, SYSUTCDATETIME()
-			FROM sys.availability_groups ag INNER JOIN sys.dm_hadr_availability_group_states ags
-			ON ag.group_id = ags.group_id
-		END;
+		;WITH primary_replicas AS
+			(
+				SELECT primary_last_commit_time = dbr.last_commit_time
+					 , dbr.group_id
+					 , dbr.group_database_id
+				FROM sys.dm_hadr_database_replica_states AS dbr
+				WHERE dbr.is_primary_replica = 1
+			)
+			INSERT INTO [data].[availability_group_properties]
+			                   ([database_id] ,[replica_id] ,[group_id] ,[group_database_id] ,[availability_group_name] ,[is_local] ,[is_primary_replica] ,[primary_replica_name]
+			                   ,[is_suspended] ,[synchronization_state] ,[synchronization_state_desc] ,[synchronization_health] ,[synchronization_health_desc] ,[is_failover_ready]
+							   ,[redo_queue_size] ,[redo_rate] ,[last_commit_time] ,[EstimatedRecoveryTimeObjective] ,[EstimatedRecoveryPointObjective] ,[LastUpdatedUTC])
 
-		MERGE [data].[availability_group_properties] dest
-		USING (	SELECT [group_id], [name], [primary_replica], [recovery_health_desc], [synchronization_health_desc], [LastUpdated] FROM @ag_info ) src
-		ON src.[group_id] = dest.[group_id]
-		WHEN NOT MATCHED THEN
-			INSERT ([group_id], [name], [primary_replica], [recovery_health_desc], [synchronization_health_desc], [LastUpdatedUTC])
-			VALUES (src.[group_id], src.[name], src.[primary_replica], src.[recovery_health_desc], src.[synchronization_health_desc], src.[LastUpdated])
-		WHEN MATCHED THEN
-			UPDATE SET [name] = src.[name]
-					, [primary_replica] = src.[primary_replica]
-					, [recovery_health_desc] = src.[recovery_health_desc]
-					, [synchronization_health_desc] = src.[synchronization_health_desc]
-					, [LastUpdatedUTC] = src.[LastUpdated]
-		;
+SELECT drs.database_id
+     , drs.replica_id
+     , drs.group_id
+     , drs.group_database_id
+     , ag.[name]
+     , drs.is_local
+     , drs.is_primary_replica
+	 , ags.primary_replica
+     , drs.is_suspended
+     , drs.synchronization_state, drs.synchronization_state_desc
+     , drs.synchronization_health, drs.synchronization_health_desc
+     , drcs.is_failover_ready
+     , drs.redo_queue_size
+     , drs.redo_rate
+     , drs.last_commit_time
+
+, EstimatedRecoveryTimeObjective = CASE WHEN drs.is_primary_replica = 1   THEN 'Primary Replica'
+                                        WHEN drs.redo_queue_size = 0      THEN 'Nothing to redo'
+										WHEN ISNULL(drs.redo_rate, 0) = 0 THEN 'No estimation available'
+                                                                          ELSE CAST( CAST(( ( (1000*drs.redo_queue_size) / drs.redo_rate ) / 1000.0) AS decimal(18,3))  AS nvarchar(20))  + ' s'
+																		  END
+
+, EstimatedRecoveryPointObjective = CASE WHEN drs.is_local = 0 THEN 'Remote replica'
+                                         WHEN drs.last_commit_time IS NULL
+                                           OR drcs.is_failover_ready IS NULL
+                                           OR primary_last_commit_time IS NULL THEN 'RPO calculation unavailable'
+                                         WHEN drcs.is_failover_ready = 1       THEN 'Failover ready, no dataloss'
+										                                       ELSE CONVERT (nvarchar, DATEADD(ms, DATEDIFF(ss, drs.last_commit_time, primary_last_commit_time) * 1000, 0), 114)
+																		       END
+, SYSUTCDATETIME()
+
+      
+FROM sys.availability_groups ag INNER JOIN sys.dm_hadr_availability_group_states ags ON ag.group_id = ags.group_id
+ INNER JOIN sys.dm_hadr_database_replica_states AS drs ON drs.group_id = ag.group_id
+    LEFT OUTER JOIN sys.dm_hadr_database_replica_cluster_states AS drcs ON drs.replica_id = drcs.replica_id AND drs.group_database_id = drcs.group_database_id
+    LEFT OUTER JOIN primary_replicas pr ON drs.group_id = pr.group_id AND drs.group_database_id = pr.group_database_id
+
+		END;
 
 	END TRY
 	BEGIN CATCH
@@ -190,16 +247,30 @@ BEGIN
 
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
-	OUTPUT @serverid serverid 
-	     , inserted.[group_id]
-		 , inserted.[name]
-		 , inserted.[primary_replica]
-		 , inserted.[recovery_health_desc]
-		 , inserted.[synchronization_health_desc]
-		 , inserted.[LastUpdatedUTC]
-		 , inserted.[LastHandledUTC]
-	FROM [data].[availability_group_properties] s
-	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
+      OUTPUT @serverid serverid
+	  ,inserted.[database_id]
+      ,inserted.[replica_id]
+      ,inserted.[group_id]
+      ,inserted.[group_database_id]
+      ,inserted.[availability_group_name]
+      ,inserted.[is_local]
+      ,inserted.[is_primary_replica]
+      ,inserted.[primary_replica_name]
+      ,inserted.[is_suspended]
+      ,inserted.[synchronization_state]
+      ,inserted.[synchronization_state_desc]
+      ,inserted.[synchronization_health]
+      ,inserted.[synchronization_health_desc]
+      ,inserted.[is_failover_ready]
+      ,inserted.[redo_queue_size]
+      ,inserted.[redo_rate]
+      ,inserted.[last_commit_time]
+      ,inserted.[EstimatedRecoveryTimeObjective]
+      ,inserted.[EstimatedRecoveryPointObjective]
+      ,inserted.[LastUpdatedUTC]
+      ,inserted.[LastHandledUTC]
+  FROM [data].[availability_group_properties] s
+  WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
 
 END
 GO
