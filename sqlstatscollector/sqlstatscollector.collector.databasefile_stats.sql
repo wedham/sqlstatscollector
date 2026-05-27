@@ -27,8 +27,8 @@ FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinition
 
 IF @TableExists = 1 AND @TableHasChanged = 1
 BEGIN
-	RAISERROR(N'DROP original table', 10, 1) WITH NOWAIT
 	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
 	EXEC (@cmd)
 	SET @TableExists = 0
 END
@@ -84,8 +84,8 @@ FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinition
 
 IF @TableExists = 1 AND @TableHasChanged = 1
 BEGIN
-	RAISERROR(N'DROP original table', 10, 1) WITH NOWAIT
 	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
 	EXEC (@cmd)
 	SET @TableExists = 0
 END

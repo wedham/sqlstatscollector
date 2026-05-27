@@ -27,8 +27,8 @@ FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinition
 
 IF @TableExists = 1 AND @TableHasChanged = 1
 BEGIN
-	RAISERROR(N'DROP original table', 10, 1) WITH NOWAIT
 	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
 	EXEC (@cmd)
 	SET @TableExists = 0
 END
@@ -69,7 +69,85 @@ END
 SELECT FullName = [FullName]
      , TableDefinitionHash = [TableDefinitionHash]
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+
+SET @TableName = N'server_properties_changes'
+SET @TableDefinitionHash = 0xC40A0C0394EF22B0DD10854A0669CB2D60AB4BE5A07ABF84DD45F5FBE92107BD
+
+
+SELECT @FullName = [FullName]
+     , @TableExists = [TableExists]
+     , @TableHasChanged = [TableHasChanged]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+IF @TableExists = 1 AND @TableHasChanged = 1
+BEGIN
+	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
+	EXEC (@cmd)
+	SET @TableExists = 0
+END
+
+
+IF @TableExists = 0
+BEGIN
+	SELECT @msg = N'Creating ' + @FullName
+	RAISERROR(@msg, 10, 1) WITH NOWAIT
+	CREATE TABLE [data].[server_properties_changes](
+		[rowtimeutc] [datetime2](7) NOT NULL,
+		[serverid] [uniqueidentifier] NOT NULL,
+		[propertyname] [nvarchar](128) NOT NULL,
+		[old_value] [nvarchar](256) NOT NULL,
+		[new_value] [nvarchar](256) NOT NULL,
+	) ON [PRIMARY]
+END
+
+SELECT FullName = [FullName]
+     , TableDefinitionHash = [TableDefinitionHash]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 GO
+
+
+RAISERROR(N'/****** Object:  Trigger [data].[server_properties_change] ******/', 10, 1) WITH NOWAIT
+GO
+CREATE OR ALTER TRIGGER [data].[server_properties_change]
+ON [data].[server_properties]
+AFTER UPDATE
+AS
+BEGIN
+
+    INSERT INTO [data].[server_properties_changes] ([rowtimeutc], [serverid], [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[serverid], changedata.propertyname, changedata.old_value, changedata.new_value
+    FROM inserted i INNER JOIN deleted d ON i.[serverid] = d.[serverid] 
+    CROSS APPLY ( VALUES 
+    -- Insert a list of columns for change tracking here.
+                  (N'[MachineName]'                , CAST(d.[MachineName] AS nvarchar(256))                , CAST(i.[MachineName] AS nvarchar(256)))
+                 ,(N'[ServerName]'                 , CAST(d.[ServerName] AS nvarchar(256))                 , CAST(i.[ServerName] AS nvarchar(256)))
+                 ,(N'[Instance]'                   , CAST(d.[Instance] AS nvarchar(256))                   , CAST(i.[Instance] AS nvarchar(256)))
+                 ,(N'[ComputerNamePhysicalNetBIOS]', CAST(d.[ComputerNamePhysicalNetBIOS] AS nvarchar(256)), CAST(i.[ComputerNamePhysicalNetBIOS] AS nvarchar(256)))
+                 ,(N'[Edition]'                    , CAST(d.[Edition] AS nvarchar(256))                    , CAST(i.[Edition] AS nvarchar(256)))
+                 ,(N'[ProductLevel]'               , CAST(d.[ProductLevel] AS nvarchar(256))               , CAST(i.[ProductLevel] AS nvarchar(256)))
+                 ,(N'[ProductVersion]'             , CAST(d.[ProductVersion] AS nvarchar(256))             , CAST(i.[ProductVersion] AS nvarchar(256)))
+                 ,(N'[Collation]'                  , CAST(d.[Collation] AS nvarchar(256))                  , CAST(i.[Collation] AS nvarchar(256)))
+                 ,(N'[IsClustered]'                , CAST(d.[IsClustered] AS nvarchar(256))                , CAST(i.[IsClustered] AS nvarchar(256)))
+                 ,(N'[IsIntegratedSecurityOnly]'   , CAST(d.[IsIntegratedSecurityOnly] AS nvarchar(256))   , CAST(i.[IsIntegratedSecurityOnly] AS nvarchar(256)))
+                 ,(N'[FilestreamConfiguredLevel]'  , CAST(d.[FilestreamConfiguredLevel] AS nvarchar(256))  , CAST(i.[FilestreamConfiguredLevel] AS nvarchar(256)))
+                 ,(N'[IsHadrEnabled]'              , CAST(d.[IsHadrEnabled] AS nvarchar(256))              , CAST(i.[IsHadrEnabled] AS nvarchar(256)))
+                 ,(N'[physical_memory_kb]'         , CAST(d.[physical_memory_kb] AS nvarchar(256))         , CAST(i.[physical_memory_kb] AS nvarchar(256)))
+                 ,(N'[cpu_count]'                  , CAST(d.[cpu_count] AS nvarchar(256))                  , CAST(i.[cpu_count] AS nvarchar(256)))
+                 ,(N'socket_count'                 , CAST(d.[socket_count] AS nvarchar(256))               , CAST(i.[socket_count] AS nvarchar(256)))
+                 ,(N'[cores_per_socket]'           , CAST(d.[cores_per_socket] AS nvarchar(256))           , CAST(i.[cores_per_socket] AS nvarchar(256)))
+                 ,(N'[virtual_machine_type_desc]'  , CAST(d.[virtual_machine_type_desc] AS nvarchar(256))  , CAST(i.[virtual_machine_type_desc] AS nvarchar(256)))
+                 ,(N'[sqlserver_start_time]'       , CONVERT(nvarchar(256), d.[sqlserver_start_time], 121) , CONVERT(nvarchar(256), i.[sqlserver_start_time], 121))
+    --End of column list             
+    ) changedata (propertyname ,old_value ,new_value)
+    WHERE changedata.old_value <> changedata.new_value
+
+
+END
+GO
+
+
 
 
 
@@ -264,6 +342,30 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
+	DECLARE @server_properties TABLE (
+		[serverid] [uniqueidentifier] NOT NULL,
+		[MachineName] [nvarchar](128) NOT NULL,
+		[ServerName] [nvarchar](128) NOT NULL,
+		[Instance] [nvarchar](128) NULL,
+		[ComputerNamePhysicalNetBIOS] [nvarchar](128) NULL,
+		[Edition] [nvarchar](128) NOT NULL,
+		[ProductLevel] [nvarchar](128) NOT NULL,
+		[ProductVersion] [nvarchar](128) NOT NULL,
+		[Collation] [nvarchar](128) NOT NULL,
+		[IsClustered] [int] NULL,
+		[IsIntegratedSecurityOnly] [int] NULL,
+		[FilestreamConfiguredLevel] [int] NULL,
+		[IsHadrEnabled] [int] NULL,
+        [physical_memory_kb] [bigint] NOT NULL,
+        [cpu_count] [int] NOT NULL,
+        [socket_count] [int] NOT NULL,
+        [cores_per_socket] [int] NOT NULL,
+        [virtual_machine_type_desc] [nvarchar](60) NOT NULL,		
+        [sqlserver_start_time] [datetime] NOT NULL,
+        [LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL)
+
+
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
 	OUTPUT inserted.[serverid] 
@@ -287,9 +389,33 @@ BEGIN
          , inserted.[sqlserver_start_time]
 		 , inserted.[LastUpdatedUTC]
 		 , inserted.[LastHandledUTC]
+	INTO @server_properties
 	FROM [data].[server_properties] s
 	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
 	AND [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
+
+		SELECT sp.[serverid] 
+	         , sp.[MachineName]
+		     , sp.[ServerName]
+		     , sp.[Instance]
+		     , sp.[ComputerNamePhysicalNetBIOS]
+		     , sp.[Edition]
+		     , sp.[ProductLevel]
+		     , sp.[ProductVersion]
+		     , sp.[Collation]
+		     , sp.[IsClustered]
+		     , sp.[IsIntegratedSecurityOnly]
+		     , sp.[FilestreamConfiguredLevel]
+		     , sp.[IsHadrEnabled]
+             , sp.[physical_memory_kb] 
+             , sp.[cpu_count] 
+             , sp.[socket_count] 
+             , sp.[cores_per_socket] 
+             , sp.[virtual_machine_type_desc]		
+             , sp.[sqlserver_start_time]
+		     , sp.[LastUpdatedUTC]
+		     , sp.[LastHandledUTC]
+		 FROM @server_properties sp
 
 END
 GO
