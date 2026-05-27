@@ -4,7 +4,9 @@
 
 The current full code version works on SQL Server 2012 and forward.
 
-- SQL Server 2008/2008 R2 see the code in the Legacy folder. Currently there is only the xevent functionality in [status_of_collectors] that doesn't work.
+- SQL Server 2008/2008 R2 see the code in the Legacy folder.
+  - The xevent functionality in [status_of_collectors] doesn't work.
+  - Physical RAM in server_properties is not compatible with 2008(R2)  
 - SQL 2005 and before is likely to never be implemented.
 
 ## Project parts
