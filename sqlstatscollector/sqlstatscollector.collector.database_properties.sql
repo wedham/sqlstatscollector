@@ -57,7 +57,8 @@ BEGIN
 		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_database_properties] PRIMARY KEY CLUSTERED 
 			(
-				[database_id] ASC
+				[database_id] ASC, 
+				[name] ASC
 			) ON [PRIMARY]
 		) ON [PRIMARY]
 END
@@ -97,6 +98,7 @@ Date		Name				Description
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-05-27	Mikael Wedham		Fix for reusable databaseids Issue #6
 *******************************************************************************/
 ALTER PROCEDURE [collect].[database_properties]
 AS
@@ -241,7 +243,7 @@ SET NOCOUNT ON
 		MERGE [data].[database_properties] dest USING 
 		(SELECT [database_id] ,[name] ,[owner_sid] ,[create_date] ,[compatibility_level] ,[collation_name] ,[is_auto_close_on] ,[is_auto_shrink_on] ,[state_desc] ,[recovery_model_desc]
 			,[page_verify_option_desc] ,[LastFullBackupTime] ,[LastDiffBackupTime] ,[LastLogBackupTime] ,[LastKnownGoodDBCCTime]
-		FROM database_properties) src ON src.[database_id] = dest.[database_id]
+		FROM database_properties) src ON src.[database_id] = dest.[database_id] AND src.[name] = dest.[name]
 		WHEN NOT MATCHED THEN
 		INSERT ([database_id] ,[name] ,[owner_sid] ,[create_date] ,[compatibility_level] ,[collation_name] ,[is_auto_close_on] ,[is_auto_shrink_on] ,[state_desc] 
 				,[recovery_model_desc] ,[page_verify_option_desc] ,[LastFullBackupTime] ,[LastDiffBackupTime] ,[LastLogBackupTime] ,[LastKnownGoodDBCCTime] ,[LastUpdatedUTC])
@@ -249,8 +251,7 @@ SET NOCOUNT ON
 				,src.[recovery_model_desc] ,src.[page_verify_option_desc] ,src.[LastFullBackupTime] ,src.[LastDiffBackupTime] ,src.[LastLogBackupTime] ,src.[LastKnownGoodDBCCTime] ,SYSUTCDATETIME())
 		WHEN MATCHED THEN
 		UPDATE SET 
-			[name] = src.[name]
-			,[owner_sid] = src.[owner_sid]
+			 [owner_sid] = src.[owner_sid]
 			,[create_date] = src.[create_date]
 			,[compatibility_level] = src.[compatibility_level]
 			,[collation_name] = src.[collation_name]

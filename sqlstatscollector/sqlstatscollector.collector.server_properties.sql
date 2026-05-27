@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'server_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x74167C9BAA53A7D8C3239409D0F770A4594D9B2A608BBF87F887EB4AD04CCF1A
+DECLARE @TableDefinitionHash varbinary(32) = 0xB797EBC471DB2A4353146799C495503ACFC94FECCC843AF8F6AD1EA55DFFB2B4
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -51,7 +51,13 @@ BEGIN
 		[IsIntegratedSecurityOnly] [int] NULL,
 		[FilestreamConfiguredLevel] [int] NULL,
 		[IsHadrEnabled] [int] NULL,
-		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+        [physical_memory_kb] [bigint] NOT NULL,
+        [cpu_count] [int] NOT NULL,
+        [socket_count] [int] NOT NULL,
+        [cores_per_socket] [int] NOT NULL,
+        [virtual_machine_type_desc] [nvarchar](60) NOT NULL,		
+        [sqlserver_start_time] [datetime] NOT NULL,
+        [LastUpdatedUTC] [datetime2](7) NOT NULL,
 		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_data_server_properties] PRIMARY KEY CLUSTERED 
 			(
@@ -91,6 +97,7 @@ Date		Name				Description
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-05-27	Mikael Wedham		Cores and memory added #29
 *******************************************************************************/
 ALTER PROCEDURE [collect].[server_properties]
 AS
@@ -135,51 +142,77 @@ SET NOCOUNT ON
 					, [IsClustered] = CAST(SERVERPROPERTY('IsClustered') AS int)
 					, [IsIntegratedSecurityOnly] = CAST(SERVERPROPERTY('IsIntegratedSecurityOnly') AS int)
 					, [FilestreamConfiguredLevel] = @FilestreamConfiguredLevel
-					, [IsHadrEnabled] = @IsHadrEnabled) src
+					, [IsHadrEnabled] = @IsHadrEnabled
+                    , [physical_memory_kb]
+                    , [cpu_count]
+                    , [socket_count]
+                    , [cores_per_socket]
+                    , [virtual_machine_type_desc]
+					, [sqlserver_start_time]
+                    FROM [sys].[dm_os_sys_info]
+					) src
 		ON dest.[MachineName] = src.[MachineName]	
 		WHEN NOT MATCHED THEN
 			INSERT ([serverid]
-				,[MachineName]
-				,[ServerName]
-				,[Instance]
-				,[ComputerNamePhysicalNetBIOS]
-				,[Edition]
-				,[ProductLevel]
-				,[ProductVersion]
-				,[Collation]
-				,[IsClustered]
-				,[IsIntegratedSecurityOnly]
-				,[FilestreamConfiguredLevel]
-				,[IsHadrEnabled]
-				,[LastUpdatedUTC] )
+				, [MachineName]
+				, [ServerName]
+				, [Instance]
+				, [ComputerNamePhysicalNetBIOS]
+				, [Edition]
+				, [ProductLevel]
+				, [ProductVersion]
+				, [Collation]
+				, [IsClustered]
+				, [IsIntegratedSecurityOnly]
+				, [FilestreamConfiguredLevel]
+				, [IsHadrEnabled]
+				, [physical_memory_kb]
+				, [cpu_count]
+				, [socket_count]
+				, [cores_per_socket]
+				, [virtual_machine_type_desc]
+				, [sqlserver_start_time]
+				, [LastUpdatedUTC] )
 			VALUES
-				(NEWID()
-				,[MachineName]
-				,[ServerName]
-				,[Instance]
-				,[ComputerNamePhysicalNetBIOS]
-				,[Edition]
-				,[ProductLevel]
-				,[ProductVersion]
-				,[Collation]
-				,[IsClustered]
-				,[IsIntegratedSecurityOnly]
-				,[FilestreamConfiguredLevel]
-				,[IsHadrEnabled]
-				,SYSUTCDATETIME())
+				( NEWID()
+				, [MachineName]
+				, [ServerName]
+				, [Instance]
+				, [ComputerNamePhysicalNetBIOS]
+				, [Edition]
+				, [ProductLevel]
+				, [ProductVersion]
+				, [Collation]
+				, [IsClustered]
+				, [IsIntegratedSecurityOnly]
+				, [FilestreamConfiguredLevel]
+				, [IsHadrEnabled]
+				, [physical_memory_kb]
+				, [cpu_count]
+				, [socket_count]
+				, [cores_per_socket]
+				, [virtual_machine_type_desc]
+				, [sqlserver_start_time]
+				, SYSUTCDATETIME())
 		WHEN MATCHED THEN
 			UPDATE SET 
-			[ServerName] = src.[ServerName]
-			,[Instance] = src.[Instance]
-			,[ComputerNamePhysicalNetBIOS] = src.[ComputerNamePhysicalNetBIOS]
-			,[Edition] = src.[Edition]
-			,[ProductLevel] = src.[ProductLevel]
-			,[ProductVersion] = src.[ProductVersion]
-			,[Collation] = src.[Collation]
-			,[IsClustered] = src.[IsClustered]
-			,[IsIntegratedSecurityOnly] = src.[IsIntegratedSecurityOnly]
-			,[FilestreamConfiguredLevel] = src.[FilestreamConfiguredLevel]
-			,[IsHadrEnabled] = src.[IsHadrEnabled]
+			  [ServerName] = src.[ServerName]
+			, [Instance] = src.[Instance]
+			, [ComputerNamePhysicalNetBIOS] = src.[ComputerNamePhysicalNetBIOS]
+			, [Edition] = src.[Edition]
+			, [ProductLevel] = src.[ProductLevel]
+			, [ProductVersion] = src.[ProductVersion]
+			, [Collation] = src.[Collation]
+			, [IsClustered] = src.[IsClustered]
+			, [IsIntegratedSecurityOnly] = src.[IsIntegratedSecurityOnly]
+			, [FilestreamConfiguredLevel] = src.[FilestreamConfiguredLevel]
+			, [IsHadrEnabled] = src.[IsHadrEnabled]
+			, [physical_memory_kb] = src.[physical_memory_kb]
+			, [cpu_count] = src.[cpu_count]
+			, [socket_count] = src.[socket_count]
+			, [cores_per_socket] = src.[cores_per_socket]
+			, [virtual_machine_type_desc] = src.[virtual_machine_type_desc]
+			, [sqlserver_start_time] = src.[sqlserver_start_time]
 			,[LastUpdatedUTC] = SYSUTCDATETIME();
 
 	END TRY
@@ -224,6 +257,7 @@ Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-04-28	Mikael Wedham		+Created v1
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-05-27	Mikael Wedham		Cores and memory added
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[server_properties]
 AS
@@ -245,6 +279,12 @@ BEGIN
 		 , inserted.[IsIntegratedSecurityOnly]
 		 , inserted.[FilestreamConfiguredLevel]
 		 , inserted.[IsHadrEnabled]
+         , inserted.[physical_memory_kb] 
+         , inserted.[cpu_count] 
+         , inserted.[socket_count] 
+         , inserted.[cores_per_socket] 
+         , inserted.[virtual_machine_type_desc]		
+         , inserted.[sqlserver_start_time]
 		 , inserted.[LastUpdatedUTC]
 		 , inserted.[LastHandledUTC]
 	FROM [data].[server_properties] s
