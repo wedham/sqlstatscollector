@@ -8,9 +8,14 @@ GO
 RAISERROR(N'Collector: [database_properties]', 10, 1) WITH NOWAIT
 GO
 
+----------------------------------------------------------------
+-- Table [data].[database_properties]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[database_properties] ******/', 10, 1) WITH NOWAIT
+
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'database_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0xE48D5E4FC00B43605C302597A6681D0A8EA14EBC9FD81E2C9BE7C530E0B6FDD2
+DECLARE @TableDefinitionHash varbinary(32) = 0x3432D127FCEA32EBCDF1BB8EBC8D15EBCE01EACC8AEA0E6182B650FB07A88711
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -49,6 +54,12 @@ BEGIN
 		[state_desc] [nvarchar](60) NOT NULL,
 		[recovery_model_desc] [nvarchar](60) NOT NULL,
 		[page_verify_option_desc] [nvarchar](60) NOT NULL,
+		[snapshot_isolation_state_desc] [nvarchar](60) NOT NULL,
+		[is_read_committed_snapshot_on] [bit] NOT NULL,
+		[is_trustworthy_on] [bit] NOT NULL,
+		[is_query_store_on] [bit] NOT NULL,
+		[is_encrypted] [bit] NOT NULL,
+		[containment_desc] [nvarchar](60) NOT NULL,
 		[LastFullBackupTime] [datetime] NULL,
 		[LastDiffBackupTime] [datetime] NULL,
 		[LastLogBackupTime] [datetime] NULL,
@@ -63,14 +74,113 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
+
+----------------------------------------------------------------
+-- Table [data].[database_properties_changes]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[database_properties_changes] ******/', 10, 1) WITH NOWAIT
+
+DECLARE @SchemaName nvarchar(128) = N'data'
+DECLARE @TableName nvarchar(128) = N'database_properties_changes'
+DECLARE @TableDefinitionHash varbinary(32) = 0x231F3ECE8CB90275AC4DC626D94AF8688690682E4A86054A05974C04DEF0EDF2
+
+DECLARE @TableExists int
+DECLARE @TableHasChanged int
+DECLARE @FullName nvarchar(255)
+DECLARE @NewName nvarchar(128)
+
+DECLARE @cmd nvarchar(2048)
+DECLARE @msg nvarchar(2048)
+
+SELECT @FullName = [FullName]
+     , @TableExists = [TableExists]
+     , @TableHasChanged = [TableHasChanged]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+IF @TableExists = 1 AND @TableHasChanged = 1
+BEGIN
+	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
+	EXEC (@cmd)
+	SET @TableExists = 0
+END
+
+
+IF @TableExists = 0
+BEGIN
+	SELECT @msg = N'Creating ' + @FullName
+	RAISERROR(@msg, 10, 1) WITH NOWAIT
+	CREATE TABLE [data].[database_properties_changes](
+		[rowtimeutc] [datetime2](7) NOT NULL,
+		[database_id] [int] NOT NULL,
+		[name] [nvarchar](128) NOT NULL,
+		[propertyname] [nvarchar](128) NOT NULL,
+		[old_value] [nvarchar](256) NOT NULL,
+		[new_value] [nvarchar](256) NOT NULL,
+	) ON [PRIMARY]
+END
+
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
+----------------------------------------------------------------
+-- Trigger [data].[database_properties_change]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Trigger [data].[database_properties_change] ******/', 10, 1) WITH NOWAIT
+GO
+CREATE OR ALTER TRIGGER [data].[database_properties_change]
+ON [data].[database_properties]
+AFTER UPDATE
+AS
+BEGIN
+
+    INSERT INTO [data].[database_properties_changes] ([rowtimeutc], [database_id], [name], [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[database_id], i.[name], changedata.propertyname, changedata.old_value, changedata.new_value
+    FROM inserted i INNER JOIN deleted d ON i.[database_id] = d.[database_id] AND i.[name] = d.[name] 
+    CROSS APPLY ( VALUES 
+    -- Insert a list of columns for change tracking here.
+
+                  (N'[owner_sid]'                     , CAST(d.[owner_sid] AS nvarchar(256))                     , CAST(i.[owner_sid] AS nvarchar(256)))
+                 ,(N'[create_date]'                   , CONVERT(nvarchar(256), d.[create_date], 121)             , CONVERT(nvarchar(256), i.[create_date], 121))
+                 ,(N'[compatibility_level]'           , CAST(d.[compatibility_level] AS nvarchar(256))           , CAST(i.[compatibility_level] AS nvarchar(256)))
+                 ,(N'[collation_name]'                , CAST(d.[collation_name] AS nvarchar(256))                , CAST(i.[collation_name] AS nvarchar(256)))
+                 ,(N'[is_auto_close_on]'              , CAST(d.[is_auto_close_on] AS nvarchar(256))              , CAST(i.[is_auto_close_on] AS nvarchar(256)))
+                 ,(N'[is_auto_shrink_on]'             , CAST(d.[is_auto_shrink_on] AS nvarchar(256))             , CAST(i.[is_auto_shrink_on] AS nvarchar(256)))
+                 ,(N'[state_desc]'                    , CAST(d.[state_desc] AS nvarchar(256))                    , CAST(i.[state_desc] AS nvarchar(256)))
+                 ,(N'[recovery_model_desc]'           , CAST(d.[recovery_model_desc] AS nvarchar(256))           , CAST(i.[recovery_model_desc] AS nvarchar(256)))
+                 ,(N'[page_verify_option_desc]'       , CAST(d.[page_verify_option_desc] AS nvarchar(256))       , CAST(i.[page_verify_option_desc] AS nvarchar(256)))
+                 ,(N'[snapshot_isolation_state_desc]' , CAST(d.[snapshot_isolation_state_desc] AS nvarchar(256)) , CAST(i.[snapshot_isolation_state_desc] AS nvarchar(256)))
+                 ,(N'[is_read_committed_snapshot_on]' , CAST(d.[is_read_committed_snapshot_on] AS nvarchar(256)) , CAST(i.[is_read_committed_snapshot_on] AS nvarchar(256)))
+                 ,(N'[is_trustworthy_on]'             , CAST(d.[is_trustworthy_on] AS nvarchar(256))             , CAST(i.[is_trustworthy_on] AS nvarchar(256)))
+                 ,(N'[is_query_store_on]'             , CAST(d.[is_query_store_on] AS nvarchar(256))             , CAST(i.[is_query_store_on] AS nvarchar(256)))
+                 ,(N'[is_encrypted]'                  , CAST(d.[is_encrypted] AS nvarchar(256))                  , CAST(i.[is_encrypted] AS nvarchar(256)))
+                 ,(N'[containment_desc]'              , CAST(d.[containment_desc] AS nvarchar(256))              , CAST(i.[containment_desc] AS nvarchar(256)))
+                 --,(N'[LastFullBackupTime]'            , CONVERT(nvarchar(256), d.[LastFullBackupTime], 121)      , CONVERT(nvarchar(256), i.[LastFullBackupTime], 121))
+                 --,(N'[LastDiffBackupTime]'            , CONVERT(nvarchar(256), d.[LastDiffBackupTime], 121)      , CONVERT(nvarchar(256), i.[LastDiffBackupTime], 121))
+                 --,(N'[LastLogBackupTime]'             , CONVERT(nvarchar(256), d.[LastLogBackupTime], 121)       , CONVERT(nvarchar(256), i.[LastLogBackupTime], 121))
+                 --,(N'[LastKnownGoodDBCCTime]'         , CONVERT(nvarchar(256), d.[LastKnownGoodDBCCTime], 121)   , CONVERT(nvarchar(256), i.[LastKnownGoodDBCCTime], 121))
+
+    --End of column list             
+    ) changedata (propertyname ,old_value ,new_value)
+    WHERE changedata.old_value <> changedata.new_value
 
 
+END
+GO
+
+
+----------------------------------------------------------------
+-- StoredProcedure [collect].[database_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[database_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -99,6 +209,7 @@ Date		Name				Description
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-05-27	Mikael Wedham		Fix for reusable databaseids Issue #6
+2026-06-03	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[database_properties]
 AS
@@ -214,6 +325,12 @@ SET NOCOUNT ON
 			, [state_desc]
 			, [recovery_model_desc]
 			, [page_verify_option_desc]
+			, [snapshot_isolation_state_desc]
+			, [is_read_committed_snapshot_on]
+			, [is_trustworthy_on]
+			, [is_query_store_on]
+			, [is_encrypted] 
+			, [containment_desc]
 			, fullbackup.[LastFullBackupTime]
 			, diffbackup.[LastDiffBackupTime]
 			, logbackup.[LastLogBackupTime]
@@ -242,13 +359,16 @@ SET NOCOUNT ON
 		/* Update the database metadata with the latest numbers */
 		MERGE [data].[database_properties] dest USING 
 		(SELECT [database_id] ,[name] ,[owner_sid] ,[create_date] ,[compatibility_level] ,[collation_name] ,[is_auto_close_on] ,[is_auto_shrink_on] ,[state_desc] ,[recovery_model_desc]
-			,[page_verify_option_desc] ,[LastFullBackupTime] ,[LastDiffBackupTime] ,[LastLogBackupTime] ,[LastKnownGoodDBCCTime]
+			,[page_verify_option_desc], [snapshot_isolation_state_desc] , [is_read_committed_snapshot_on], [is_trustworthy_on], [is_query_store_on], [is_encrypted] 
+			, [containment_desc] ,[LastFullBackupTime] ,[LastDiffBackupTime] ,[LastLogBackupTime] ,[LastKnownGoodDBCCTime]
 		FROM database_properties) src ON src.[database_id] = dest.[database_id] AND src.[name] = dest.[name]
 		WHEN NOT MATCHED THEN
 		INSERT ([database_id] ,[name] ,[owner_sid] ,[create_date] ,[compatibility_level] ,[collation_name] ,[is_auto_close_on] ,[is_auto_shrink_on] ,[state_desc] 
-				,[recovery_model_desc] ,[page_verify_option_desc] ,[LastFullBackupTime] ,[LastDiffBackupTime] ,[LastLogBackupTime] ,[LastKnownGoodDBCCTime] ,[LastUpdatedUTC])
+				,[recovery_model_desc] ,[page_verify_option_desc], [snapshot_isolation_state_desc], [is_read_committed_snapshot_on], [is_trustworthy_on]
+			    , [is_query_store_on], [is_encrypted], [containment_desc] ,[LastFullBackupTime] ,[LastDiffBackupTime] ,[LastLogBackupTime] ,[LastKnownGoodDBCCTime] ,[LastUpdatedUTC])
 		VALUES (src.[database_id] ,src.[name] ,src.[owner_sid] ,src.[create_date] ,src.[compatibility_level] ,src.[collation_name] ,src.[is_auto_close_on] ,src.[is_auto_shrink_on] ,src.[state_desc] 
-				,src.[recovery_model_desc] ,src.[page_verify_option_desc] ,src.[LastFullBackupTime] ,src.[LastDiffBackupTime] ,src.[LastLogBackupTime] ,src.[LastKnownGoodDBCCTime] ,SYSUTCDATETIME())
+				,src.[recovery_model_desc] ,src.[page_verify_option_desc], src.[snapshot_isolation_state_desc], src.[is_read_committed_snapshot_on], src.[is_trustworthy_on]
+			    , src.[is_query_store_on], src.[is_encrypted], src.[containment_desc] ,src.[LastFullBackupTime] ,src.[LastDiffBackupTime] ,src.[LastLogBackupTime] ,src.[LastKnownGoodDBCCTime] ,SYSUTCDATETIME())
 		WHEN MATCHED THEN
 		UPDATE SET 
 			 [owner_sid] = src.[owner_sid]
@@ -260,6 +380,12 @@ SET NOCOUNT ON
 			,[state_desc] = src.[state_desc]
 			,[recovery_model_desc] = src.[recovery_model_desc]
 			,[page_verify_option_desc] = src.[page_verify_option_desc]
+			,[snapshot_isolation_state_desc] = src.[snapshot_isolation_state_desc]
+			,[is_read_committed_snapshot_on] = src.[is_read_committed_snapshot_on]
+			,[is_trustworthy_on] = src.[is_trustworthy_on]
+			,[is_query_store_on] = src.[is_query_store_on]
+			,[is_encrypted] = src.[is_encrypted]
+			,[containment_desc] = src.[containment_desc]
 			,[LastFullBackupTime] = src.[LastFullBackupTime]
 			,[LastDiffBackupTime] = src.[LastDiffBackupTime]
 			,[LastLogBackupTime] = src.[LastLogBackupTime]
@@ -280,11 +406,12 @@ SET NOCOUNT ON
 	, [errornumber] = @@ERROR
 	WHERE [Id] = @current_logitem
 
-
 END
 GO
 
-
+----------------------------------------------------------------
+-- StoredProcedure [transfer].[database_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[database_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -307,6 +434,7 @@ Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-04-28	Mikael Wedham		+Created v1
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-06-03	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[database_properties]
 AS
@@ -316,6 +444,34 @@ BEGIN
 	SELECT @serverid = [serverid]
 	FROM [data].[server_properties]
 	WHERE [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
+
+	DECLARE @database_properties TABLE (
+		[serverid] [uniqueidentifier] NOT NULL,
+		[database_id] [int] NOT NULL,
+		[name] [nvarchar](128) NOT NULL,
+		[owner_sid] [varbinary](85) NOT NULL,
+		[create_date] [datetime] NOT NULL,
+		[compatibility_level] [tinyint] NOT NULL,
+		[collation_name] [nvarchar](128) NULL,
+		[is_auto_close_on] [bit] NOT NULL,
+		[is_auto_shrink_on] [bit] NOT NULL,
+		[state_desc] [nvarchar](60) NOT NULL,
+		[recovery_model_desc] [nvarchar](60) NOT NULL,
+		[page_verify_option_desc] [nvarchar](60) NOT NULL,
+		[snapshot_isolation_state_desc] [nvarchar](60) NOT NULL,
+		[is_read_committed_snapshot_on] [bit] NOT NULL,
+		[is_trustworthy_on] [bit] NOT NULL,
+		[is_query_store_on] [bit] NOT NULL,
+		[is_encrypted] [bit] NOT NULL,
+		[containment_desc] [nvarchar](60) NOT NULL,
+		[LastFullBackupTime] [datetime] NULL,
+		[LastDiffBackupTime] [datetime] NULL,
+		[LastLogBackupTime] [datetime] NULL,
+		[LastKnownGoodDBCCTime] [datetime] NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL)
+
+
 
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
@@ -331,18 +487,54 @@ BEGIN
 		 , inserted.[state_desc]
 		 , inserted.[recovery_model_desc]
 		 , inserted.[page_verify_option_desc]
+		 , inserted.[snapshot_isolation_state_desc]
+		 , inserted.[is_read_committed_snapshot_on]
+		 , inserted.[is_trustworthy_on]
+		 , inserted.[is_query_store_on]
+		 , inserted.[is_encrypted]
+		 , inserted.[containment_desc]
 		 , inserted.[LastFullBackupTime]
 		 , inserted.[LastDiffBackupTime]
 		 , inserted.[LastLogBackupTime]
 		 , inserted.[LastKnownGoodDBCCTime]
 		 , inserted.[LastUpdatedUTC]
 		 , inserted.[LastHandledUTC]
+    INTO @database_properties
 	FROM [data].[database_properties] s
 	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
+
+	SELECT dp.serverid 
+	     , dp.[database_id]
+		 , dp.[name]
+		 , dp.[owner_sid]
+		 , dp.[create_date]
+		 , dp.[compatibility_level]
+		 , dp.[collation_name]
+		 , dp.[is_auto_close_on]
+		 , dp.[is_auto_shrink_on]
+		 , dp.[state_desc]
+		 , dp.[recovery_model_desc]
+		 , dp.[page_verify_option_desc]
+		 , dp.[snapshot_isolation_state_desc]
+		 , dp.[is_read_committed_snapshot_on]
+		 , dp.[is_trustworthy_on]
+		 , dp.[is_query_store_on]
+		 , dp.[is_encrypted]
+		 , dp.[containment_desc]
+		 , dp.[LastFullBackupTime]
+		 , dp.[LastDiffBackupTime]
+		 , dp.[LastLogBackupTime]
+		 , dp.[LastKnownGoodDBCCTime]
+		 , dp.[LastUpdatedUTC]
+		 , dp.[LastHandledUTC]
+    FROM @database_properties dp
 
 END
 GO
 
+----------------------------------------------------------------
+-- Finalizing [database_properties]
+----------------------------------------------------------------
 RAISERROR(N'Adding collector to [internal].[collectors]', 10, 1) WITH NOWAIT
 GO
 

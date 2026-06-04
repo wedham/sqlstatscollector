@@ -8,6 +8,11 @@ GO
 RAISERROR(N'Collector: [job_properties]', 10, 1) WITH NOWAIT
 GO
 
+----------------------------------------------------------------
+-- Table [data].[job_properties]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[job_properties] ******/', 10, 1) WITH NOWAIT
+
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'job_properties'
 DECLARE @TableDefinitionHash varbinary(32) = 0x649721BBC7292D233699F117823C7FBEACE0347FC2793FEED6A8F367663DF415
@@ -58,14 +63,102 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
+
+----------------------------------------------------------------
+-- Table [data].[job_properties_changes]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[job_properties_changes] ******/', 10, 1) WITH NOWAIT
+
+DECLARE @SchemaName nvarchar(128) = N'data'
+DECLARE @TableName nvarchar(128) = N'job_properties_changes'
+DECLARE @TableDefinitionHash varbinary(32) = 0x2DBDD2D88F38076AB89C321ECA5FA9EFB509FD117CD12B70442B8D6A6B8557A2
+
+DECLARE @TableExists int
+DECLARE @TableHasChanged int
+DECLARE @FullName nvarchar(255)
+DECLARE @NewName nvarchar(128)
+
+DECLARE @cmd nvarchar(2048)
+DECLARE @msg nvarchar(2048)
+
+SELECT @FullName = [FullName]
+     , @TableExists = [TableExists]
+     , @TableHasChanged = [TableHasChanged]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+IF @TableExists = 1 AND @TableHasChanged = 1
+BEGIN
+	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
+	EXEC (@cmd)
+	SET @TableExists = 0
+END
+
+
+IF @TableExists = 0
+BEGIN
+	SELECT @msg = N'Creating ' + @FullName
+	RAISERROR(@msg, 10, 1) WITH NOWAIT
+	CREATE TABLE [data].[job_properties_changes](
+		[rowtimeutc] [datetime2](7) NOT NULL,
+		[job_id] [uniqueidentifier] NOT NULL,
+		[propertyname] [nvarchar](128) NOT NULL,
+		[old_value] [nvarchar](256) NOT NULL,
+		[new_value] [nvarchar](256) NOT NULL,
+	) ON [PRIMARY]
+END
+
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
+----------------------------------------------------------------
+-- Trigger [data].[job_properties_change]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Trigger [data].[job_properties_change] ******/', 10, 1) WITH NOWAIT
+GO
+CREATE OR ALTER TRIGGER [data].[job_properties_change]
+ON [data].[job_properties]
+AFTER UPDATE
+AS
+BEGIN
+
+    INSERT INTO [data].[job_properties_changes] ([rowtimeutc], [job_id], [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[job_id], changedata.propertyname, changedata.old_value, changedata.new_value
+    FROM inserted i INNER JOIN deleted d ON i.[job_id] = d.[job_id] 
+    CROSS APPLY ( VALUES 
+    -- Insert a list of columns for change tracking here.
+
+                  (N'[job_name]'           , CAST(d.[job_name] AS nvarchar(256))             , CAST(i.[job_name] AS nvarchar(256)))
+                 --,(N'[description]'        , CAST(d.[description] AS nvarchar(256))          , CAST(i.[description] AS nvarchar(256)))
+                 --,(N'[job_category]'       , CAST(d.[job_category] AS nvarchar(256))         , CAST(i.[job_category] AS nvarchar(256)))
+                 ,(N'[job_owner]'          , CAST(d.[job_owner] AS nvarchar(256))            , CAST(i.[job_owner] AS nvarchar(256)))
+                 ,(N'[enabled]'            , CAST(d.[enabled] AS nvarchar(256))              , CAST(i.[enabled] AS nvarchar(256)))
+                 ,(N'[notify_email_desc]'  , CAST(d.[notify_email_desc] AS nvarchar(256))    , CAST(i.[notify_email_desc] AS nvarchar(256)))
+                 --,(N'[run_status_desc]'    , CAST(d.[run_status_desc] AS nvarchar(256))      , CAST(i.[run_status_desc] AS nvarchar(256)))
+                 --,(N'[last_startdate]'     , CONVERT(nvarchar(256), d.[last_startdate], 121) , CONVERT(nvarchar(256), i.[last_startdate], 121))
+                 --,(N'[last_duration]'      , CAST(d.[last_duration] AS nvarchar(256))        , CAST(i.[last_duration] AS nvarchar(256)))
+                 --,(N'[run_duration_avg]'   , CAST(d.[run_duration_avg] AS nvarchar(256))     , CAST(i.[run_duration_avg] AS nvarchar(256)))
+
+    --End of column list             
+    ) changedata (propertyname ,old_value ,new_value)
+    WHERE changedata.old_value <> changedata.new_value
+
+END
+GO
 
 
+----------------------------------------------------------------
+-- StoredProcedure [collect].[job_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[job_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -91,6 +184,7 @@ Date		Name				Description
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-06-03	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[job_properties]
 AS
@@ -223,7 +317,9 @@ END
 GO
 
 
-
+----------------------------------------------------------------
+-- StoredProcedure [transfer].[job_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[job_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -246,6 +342,7 @@ Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-04-28	Mikael Wedham		+Created v1
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-06-03	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[job_properties]
 AS
@@ -255,6 +352,24 @@ BEGIN
 	SELECT @serverid = [serverid]
 	FROM [data].[server_properties]
 	WHERE [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
+
+	DECLARE @job_properties TABLE (
+		[serverid] [uniqueidentifier] NOT NULL,
+		[job_id] [uniqueidentifier] NOT NULL,
+		[job_name] [nvarchar](128) NOT NULL,
+		[description] [nvarchar](512) NOT NULL,
+		[job_category] [nvarchar](128) NOT NULL,
+		[job_owner] [nvarchar](128) NOT NULL,
+		[enabled] [tinyint] NOT NULL,
+		[notify_email_desc] [nvarchar](15) NOT NULL,
+		[run_status_desc] [nvarchar](15) NOT NULL,
+		[last_startdate] [datetime] NOT NULL,
+		[last_duration] [decimal](18, 3) NOT NULL,
+		[run_duration_avg] [decimal](18, 3) NOT NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL)
+
+
 
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
@@ -272,12 +387,32 @@ BEGIN
 		 , inserted.[run_duration_avg]
 		 , inserted.[LastUpdatedUTC]
 		 , inserted.[LastHandledUTC]
+	INTO @job_properties
 	FROM [data].[job_properties] s
 	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
+
+	SELECT jp.serverid 
+	     , jp.[job_id]
+		 , jp.[job_name]
+		 , jp.[description]
+		 , jp.[job_category]
+		 , jp.[job_owner]
+		 , jp.[enabled]
+		 , jp.[notify_email_desc]
+		 , jp.[run_status_desc]
+		 , jp.[last_startdate]
+		 , jp.[last_duration]
+		 , jp.[run_duration_avg]
+		 , jp.[LastUpdatedUTC]
+		 , jp.[LastHandledUTC]
+	FROM @job_properties jp
 
 END
 GO
 
+----------------------------------------------------------------
+-- Finalizing [job_properties]
+----------------------------------------------------------------
 RAISERROR(N'Adding collector to [internal].[collectors]', 10, 1) WITH NOWAIT
 GO
 

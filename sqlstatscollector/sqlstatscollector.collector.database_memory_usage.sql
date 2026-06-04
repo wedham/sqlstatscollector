@@ -8,9 +8,13 @@ GO
 RAISERROR(N'Collector: [database_memory_usage]', 10, 1) WITH NOWAIT
 GO
 
+----------------------------------------------------------------
+-- Table [data].[database_memory_usage]
+----------------------------------------------------------------
+
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'database_memory_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0xB09B516E503E2D334ED50B56B791F35D97AFACF1CC15DF38964E2F88B42EE65A
+DECLARE @TableDefinitionHash varbinary(32) = 0x7C15CD0E13BC55A93375033A91361692618368D3A4F67E3213289715AAD78BA2
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -41,7 +45,7 @@ BEGIN
 		[rowtimeutc] [datetime2](7) NOT NULL,
 		[database_id] [int] NOT NULL,
 		[page_count] [int] NOT NULL,
-		[cached_size_mb] [decimal](15, 2) NOT NULL,
+		[cached_size_mb] [decimal](18, 3) NOT NULL,
 		[buffer_pool_percent] [decimal](5, 2) NOT NULL,
 		[LastUpdatedUTC] [datetime2](7) NOT NULL,
 		[LastHandledUTC] [datetime2](7) NULL,
@@ -53,12 +57,16 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
+----------------------------------------------------------------
+-- StoredProcedure [collect].[database_memory_usage]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[database_memory_usage] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -85,6 +93,7 @@ Date		Name				Description
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-06-02	Mikael Wedham		Adjusted datatype
 *******************************************************************************/
 ALTER PROCEDURE [collect].[database_memory_usage]
 AS
@@ -107,7 +116,7 @@ SET NOCOUNT ON
 		;WITH memory_usage AS
 		(SELECT [database_id]
 			, [page_count] = COUNT(page_id) 
-			, [cached_size_mb] = CAST(COUNT_BIG(*) * 8/1024.0 AS decimal(15,2))
+			, [cached_size_mb] = CAST(COUNT_BIG(*) * 8/1024.0 AS decimal(18,3))
 		FROM sys.dm_os_buffer_descriptors WITH (NOLOCK)
 		GROUP BY database_id)
 
@@ -143,6 +152,9 @@ GO
 
 
 
+----------------------------------------------------------------
+-- StoredProcedure [transfer].[database_memory_usage]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[database_memory_usage] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -200,6 +212,9 @@ END
 GO
 
 
+----------------------------------------------------------------
+-- Finalizing [database_memory_usage]
+----------------------------------------------------------------
 RAISERROR(N'Adding collector to [internal].[collectors]', 10, 1) WITH NOWAIT
 GO
 
