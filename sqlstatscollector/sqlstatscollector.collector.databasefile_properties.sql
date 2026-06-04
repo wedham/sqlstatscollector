@@ -8,6 +8,10 @@ GO
 
 RAISERROR(N'Collector: [databasefile_properties]', 10, 1) WITH NOWAIT
 GO
+----------------------------------------------------------------
+-- Table [data].[databasefile_properties]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[databasefile_properties] ******/', 10, 1) WITH NOWAIT
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'databasefile_properties'
@@ -59,11 +63,102 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
+----------------------------------------------------------------
+-- Table [data].[databasefile_properties_changes]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[databasefile_properties_changes] ******/', 10, 1) WITH NOWAIT
+
+DECLARE @SchemaName nvarchar(128) = N'data'
+DECLARE @TableName nvarchar(128) = N'databasefile_properties_changes'
+DECLARE @TableDefinitionHash varbinary(32) = 0x3CE4565A8505B6C77F22481EC27E514DB09C032E6BCB45F49D036A1FE25A0E99
+
+DECLARE @TableExists int
+DECLARE @TableHasChanged int
+DECLARE @FullName nvarchar(255)
+DECLARE @NewName nvarchar(128)
+
+DECLARE @cmd nvarchar(2048)
+DECLARE @msg nvarchar(2048)
+
+SELECT @FullName = [FullName]
+     , @TableExists = [TableExists]
+     , @TableHasChanged = [TableHasChanged]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+IF @TableExists = 1 AND @TableHasChanged = 1
+BEGIN
+	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
+	EXEC (@cmd)
+	SET @TableExists = 0
+END
+
+
+IF @TableExists = 0
+BEGIN
+	SELECT @msg = N'Creating ' + @FullName
+	RAISERROR(@msg, 10, 1) WITH NOWAIT
+	CREATE TABLE [data].[databasefile_properties_changes](
+		[rowtimeutc] [datetime2](7) NOT NULL,
+		[database_id] [int] NOT NULL,
+		[file_id] [int] NOT NULL,
+		[propertyname] [nvarchar](128) NOT NULL,
+		[old_value] [nvarchar](256) NOT NULL,
+		[new_value] [nvarchar](256) NOT NULL,
+	) ON [PRIMARY]
+END
+
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
+
+
+----------------------------------------------------------------
+-- Trigger [data].[databasefile_properties_change]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Trigger [data].[databasefile_properties_change] ******/', 10, 1) WITH NOWAIT
+GO
+CREATE OR ALTER TRIGGER [data].[databasefile_properties_change]
+ON [data].[databasefile_properties]
+AFTER UPDATE
+AS
+BEGIN
+
+    INSERT INTO [data].[databasefile_properties_changes] ([rowtimeutc], [database_id], [file_id], [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[database_id], i.[file_id], changedata.propertyname, changedata.old_value, changedata.new_value
+    FROM inserted i INNER JOIN deleted d ON i.[database_id] = d.[database_id] AND i.[file_id] = d.[file_id] 
+    CROSS APPLY ( VALUES 
+    -- Insert a list of columns for change tracking here.
+
+                  (N'[type_desc]'      , CAST(d.[type_desc] AS nvarchar(256))      , CAST(i.[type_desc] AS nvarchar(256)))
+                 ,(N'[name]'           , CAST(d.[name] AS nvarchar(256))           , CAST(i.[name] AS nvarchar(256)))
+                 ,(N'[physical_name]'  , CAST(d.[physical_name] AS nvarchar(256))  , CAST(i.[physical_name] AS nvarchar(256)))
+                 ,(N'[state_desc]'     , CAST(d.[state_desc] AS nvarchar(256))     , CAST(i.[state_desc] AS nvarchar(256)))
+                 ,(N'[size_mb]'        , CAST(d.[size_mb] AS nvarchar(256))        , CAST(i.[size_mb] AS nvarchar(256)))
+                 ,(N'[max_size_mb]'    , CAST(d.[max_size_mb] AS nvarchar(256))    , CAST(i.[max_size_mb] AS nvarchar(256)))
+                 ,(N'[growth_mb]'      , CAST(d.[growth_mb] AS nvarchar(256))      , CAST(i.[growth_mb] AS nvarchar(256)))
+                 ,(N'[growth_percent]' , CAST(d.[growth_percent] AS nvarchar(256)) , CAST(i.[growth_percent] AS nvarchar(256)))
+
+    --End of column list             
+    ) changedata (propertyname ,old_value ,new_value)
+    WHERE changedata.old_value <> changedata.new_value
+
+
+END
+GO
+
+
+----------------------------------------------------------------
+-- StoredProcedure [collect].[databasefile_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[databasefile_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -90,6 +185,7 @@ Date		Name				Description
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-06-03	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[databasefile_properties]
 AS
@@ -109,7 +205,6 @@ SET NOCOUNT ON
 
 	BEGIN TRY
 
-		/* Only one statement is needed */
 		MERGE [data].[databasefile_properties] dest USING 
 		(SELECT f.[database_id]
 			, f.[file_id]
@@ -133,7 +228,7 @@ SET NOCOUNT ON
 				, src.[size_mb], src.[max_size_mb] ,src.[growth_mb] ,src.[growth_percent] ,SYSUTCDATETIME()) 
 		WHEN MATCHED THEN 
 			UPDATE SET
-			[type_desc] = src.[type_desc]
+			 [type_desc] = src.[type_desc]
 			,[name] = src.[name]
 			,[physical_name] = src.[physical_name]
 			,[state_desc] = src.[state_desc]
@@ -174,6 +269,9 @@ GO
 
 
 
+----------------------------------------------------------------
+-- StoredProcedure [transfer].[databasefile_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[databasefile_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -196,6 +294,7 @@ Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-04-28	Mikael Wedham		+Created v1
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-06-03	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[databasefile_properties]
 AS
@@ -205,6 +304,22 @@ BEGIN
 	SELECT @serverid = [serverid]
 	FROM [data].[server_properties]
 	WHERE [MachineName] = CAST(SERVERPROPERTY('MachineName') AS nvarchar(128))
+
+		DECLARE @fp TABLE (
+		[serverid] [uniqueidentifier] NOT NULL,
+		[database_id] [int] NOT NULL,
+		[file_id] [int] NOT NULL,
+		[type_desc] [nvarchar](60) NOT NULL,
+		[name] [nvarchar](128) NOT NULL,
+		[physical_name] [nvarchar](260) NOT NULL,
+		[state_desc] [nvarchar](60) NOT NULL,
+		[size_mb] [decimal](19, 4) NOT NULL,
+		[max_size_mb] [int] NULL,
+		[growth_mb] [int] NULL,
+		[growth_percent] [int] NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL)
+
 
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
@@ -221,12 +336,31 @@ BEGIN
 		 , inserted.[growth_percent]
 		 , inserted.[LastUpdatedUTC]
 		 , inserted.[LastHandledUTC]
+	INTO @fp
 	FROM [data].[databasefile_properties] s
 	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
+
+    SELECT fp.serverid 
+	     , fp.[database_id]
+		 , fp.[file_id]
+		 , fp.[type_desc]
+		 , fp.[name]
+		 , fp.[physical_name]
+		 , fp.[state_desc]
+		 , fp.[size_mb]
+		 , fp.[max_size_mb]
+		 , fp.[growth_mb]
+		 , fp.[growth_percent]
+		 , fp.[LastUpdatedUTC]
+		 , fp.[LastHandledUTC]
+	FROM @fp fp
 
 END
 GO
 
+----------------------------------------------------------------
+-- Finalizing [databasefile_properties]
+----------------------------------------------------------------
 RAISERROR(N'Adding collector to [internal].[collectors]', 10, 1) WITH NOWAIT
 GO
 

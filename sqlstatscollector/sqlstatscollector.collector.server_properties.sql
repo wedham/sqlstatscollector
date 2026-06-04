@@ -8,9 +8,14 @@ GO
 RAISERROR(N'Collector: [server_properties]', 10, 1) WITH NOWAIT
 GO
 
+----------------------------------------------------------------
+-- Table [data].[server_properties]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[server_properties] ******/', 10, 1) WITH NOWAIT
+
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'server_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0xB797EBC471DB2A4353146799C495503ACFC94FECCC843AF8F6AD1EA55DFFB2B4
+DECLARE @TableDefinitionHash varbinary(32) = 0x87DE20EE23E1841CE5C0303D1F8774597C9D61E6DE9ACADB1D61ADE92AE2A4E0
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -51,7 +56,7 @@ BEGIN
 		[IsIntegratedSecurityOnly] [int] NULL,
 		[FilestreamConfiguredLevel] [int] NULL,
 		[IsHadrEnabled] [int] NULL,
-        [physical_memory_kb] [bigint] NOT NULL,
+        [physical_memory_mb] [decimal](18,3) NOT NULL,
         [cpu_count] [int] NOT NULL,
         [socket_count] [int] NOT NULL,
         [cores_per_socket] [int] NOT NULL,
@@ -66,14 +71,29 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 
-SET @TableName = N'server_properties_changes'
-SET @TableDefinitionHash = 0xC40A0C0394EF22B0DD10854A0669CB2D60AB4BE5A07ABF84DD45F5FBE92107BD
+GO
 
+----------------------------------------------------------------
+-- Table [data].[server_properties_changes]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[server_properties_changes] ******/', 10, 1) WITH NOWAIT
+
+DECLARE @SchemaName nvarchar(128) = N'data'
+DECLARE @TableName nvarchar(128) = N'server_properties_changes'
+DECLARE @TableDefinitionHash varbinary(32) = 0xC40A0C0394EF22B0DD10854A0669CB2D60AB4BE5A07ABF84DD45F5FBE92107BD
+
+DECLARE @TableExists int
+DECLARE @TableHasChanged int
+DECLARE @FullName nvarchar(255)
+DECLARE @NewName nvarchar(128)
+
+DECLARE @cmd nvarchar(2048)
+DECLARE @msg nvarchar(2048)
 
 SELECT @FullName = [FullName]
      , @TableExists = [TableExists]
@@ -102,12 +122,16 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
+----------------------------------------------------------------
+-- Trigger [data].[server_properties_change]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  Trigger [data].[server_properties_change] ******/', 10, 1) WITH NOWAIT
 GO
 CREATE OR ALTER TRIGGER [data].[server_properties_change]
@@ -121,6 +145,7 @@ BEGIN
     FROM inserted i INNER JOIN deleted d ON i.[serverid] = d.[serverid] 
     CROSS APPLY ( VALUES 
     -- Insert a list of columns for change tracking here.
+
                   (N'[MachineName]'                , CAST(d.[MachineName] AS nvarchar(256))                , CAST(i.[MachineName] AS nvarchar(256)))
                  ,(N'[ServerName]'                 , CAST(d.[ServerName] AS nvarchar(256))                 , CAST(i.[ServerName] AS nvarchar(256)))
                  ,(N'[Instance]'                   , CAST(d.[Instance] AS nvarchar(256))                   , CAST(i.[Instance] AS nvarchar(256)))
@@ -133,24 +158,23 @@ BEGIN
                  ,(N'[IsIntegratedSecurityOnly]'   , CAST(d.[IsIntegratedSecurityOnly] AS nvarchar(256))   , CAST(i.[IsIntegratedSecurityOnly] AS nvarchar(256)))
                  ,(N'[FilestreamConfiguredLevel]'  , CAST(d.[FilestreamConfiguredLevel] AS nvarchar(256))  , CAST(i.[FilestreamConfiguredLevel] AS nvarchar(256)))
                  ,(N'[IsHadrEnabled]'              , CAST(d.[IsHadrEnabled] AS nvarchar(256))              , CAST(i.[IsHadrEnabled] AS nvarchar(256)))
-                 ,(N'[physical_memory_kb]'         , CAST(d.[physical_memory_kb] AS nvarchar(256))         , CAST(i.[physical_memory_kb] AS nvarchar(256)))
+                 ,(N'[physical_memory_mb]'         , CAST(d.[physical_memory_mb] AS nvarchar(256))         , CAST(i.[physical_memory_mb] AS nvarchar(256)))
                  ,(N'[cpu_count]'                  , CAST(d.[cpu_count] AS nvarchar(256))                  , CAST(i.[cpu_count] AS nvarchar(256)))
-                 ,(N'socket_count'                 , CAST(d.[socket_count] AS nvarchar(256))               , CAST(i.[socket_count] AS nvarchar(256)))
+                 ,(N'[socket_count]'               , CAST(d.[socket_count] AS nvarchar(256))               , CAST(i.[socket_count] AS nvarchar(256)))
                  ,(N'[cores_per_socket]'           , CAST(d.[cores_per_socket] AS nvarchar(256))           , CAST(i.[cores_per_socket] AS nvarchar(256)))
                  ,(N'[virtual_machine_type_desc]'  , CAST(d.[virtual_machine_type_desc] AS nvarchar(256))  , CAST(i.[virtual_machine_type_desc] AS nvarchar(256)))
                  ,(N'[sqlserver_start_time]'       , CONVERT(nvarchar(256), d.[sqlserver_start_time], 121) , CONVERT(nvarchar(256), i.[sqlserver_start_time], 121))
+
     --End of column list             
     ) changedata (propertyname ,old_value ,new_value)
     WHERE changedata.old_value <> changedata.new_value
 
-
 END
 GO
 
-
-
-
-
+----------------------------------------------------------------
+-- StoredProcedure [collect].[server_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[server_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -159,7 +183,6 @@ BEGIN
 	EXEC ('CREATE PROCEDURE [collect].[server_properties] AS SELECT NULL')
 END
 GO
-
 
 /*******************************************************************************
    Copyright (c) 2022 Mikael Wedham (MIT License)
@@ -176,6 +199,7 @@ Date		Name				Description
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-05-27	Mikael Wedham		Cores and memory added #29
+2026-06-02	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[server_properties]
 AS
@@ -221,7 +245,7 @@ SET NOCOUNT ON
 					, [IsIntegratedSecurityOnly] = CAST(SERVERPROPERTY('IsIntegratedSecurityOnly') AS int)
 					, [FilestreamConfiguredLevel] = @FilestreamConfiguredLevel
 					, [IsHadrEnabled] = @IsHadrEnabled
-                    , [physical_memory_kb]
+                    , [physical_memory_mb] = CAST([physical_memory_kb] / 1024.0 AS decimal(18,3)) 
                     , [cpu_count]
                     , [socket_count]
                     , [cores_per_socket]
@@ -244,7 +268,7 @@ SET NOCOUNT ON
 				, [IsIntegratedSecurityOnly]
 				, [FilestreamConfiguredLevel]
 				, [IsHadrEnabled]
-				, [physical_memory_kb]
+				, [physical_memory_mb]
 				, [cpu_count]
 				, [socket_count]
 				, [cores_per_socket]
@@ -265,7 +289,7 @@ SET NOCOUNT ON
 				, [IsIntegratedSecurityOnly]
 				, [FilestreamConfiguredLevel]
 				, [IsHadrEnabled]
-				, [physical_memory_kb]
+				, [physical_memory_mb]
 				, [cpu_count]
 				, [socket_count]
 				, [cores_per_socket]
@@ -285,13 +309,13 @@ SET NOCOUNT ON
 			, [IsIntegratedSecurityOnly] = src.[IsIntegratedSecurityOnly]
 			, [FilestreamConfiguredLevel] = src.[FilestreamConfiguredLevel]
 			, [IsHadrEnabled] = src.[IsHadrEnabled]
-			, [physical_memory_kb] = src.[physical_memory_kb]
+			, [physical_memory_mb] = src.[physical_memory_mb]
 			, [cpu_count] = src.[cpu_count]
 			, [socket_count] = src.[socket_count]
 			, [cores_per_socket] = src.[cores_per_socket]
 			, [virtual_machine_type_desc] = src.[virtual_machine_type_desc]
 			, [sqlserver_start_time] = src.[sqlserver_start_time]
-			,[LastUpdatedUTC] = SYSUTCDATETIME();
+			, [LastUpdatedUTC] = SYSUTCDATETIME();
 
 	END TRY
 	BEGIN CATCH
@@ -313,6 +337,9 @@ GO
 
 
 
+----------------------------------------------------------------
+-- StoredProcedure [transfer].[server_properties]
+----------------------------------------------------------------
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[server_properties] ******/', 10, 1) WITH NOWAIT
 GO
 
@@ -336,6 +363,7 @@ Date		Name				Description
 2022-04-28	Mikael Wedham		+Created v1
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-05-27	Mikael Wedham		Cores and memory added
+2026-06-02	Mikael Wedham		History functionality added
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[server_properties]
 AS
@@ -356,7 +384,7 @@ BEGIN
 		[IsIntegratedSecurityOnly] [int] NULL,
 		[FilestreamConfiguredLevel] [int] NULL,
 		[IsHadrEnabled] [int] NULL,
-        [physical_memory_kb] [bigint] NOT NULL,
+        [physical_memory_mb] [decimal](18,3) NOT NULL,
         [cpu_count] [int] NOT NULL,
         [socket_count] [int] NOT NULL,
         [cores_per_socket] [int] NOT NULL,
@@ -381,7 +409,7 @@ BEGIN
 		 , inserted.[IsIntegratedSecurityOnly]
 		 , inserted.[FilestreamConfiguredLevel]
 		 , inserted.[IsHadrEnabled]
-         , inserted.[physical_memory_kb] 
+         , inserted.[physical_memory_mb] 
          , inserted.[cpu_count] 
          , inserted.[socket_count] 
          , inserted.[cores_per_socket] 
@@ -407,7 +435,7 @@ BEGIN
 		     , sp.[IsIntegratedSecurityOnly]
 		     , sp.[FilestreamConfiguredLevel]
 		     , sp.[IsHadrEnabled]
-             , sp.[physical_memory_kb] 
+             , sp.[physical_memory_mb] 
              , sp.[cpu_count] 
              , sp.[socket_count] 
              , sp.[cores_per_socket] 
@@ -420,6 +448,9 @@ BEGIN
 END
 GO
 
+----------------------------------------------------------------
+-- Finalizing [server_properties]
+----------------------------------------------------------------
 RAISERROR(N'Adding collector to [internal].[collectors]', 10, 1) WITH NOWAIT
 GO
 

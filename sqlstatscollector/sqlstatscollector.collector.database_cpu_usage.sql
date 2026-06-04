@@ -53,9 +53,10 @@ BEGIN
 
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'internal_data'
@@ -93,10 +94,12 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
+
 
 RAISERROR(N'/****** Object:  StoredProcedure [collect].[database_cpu_usage] ******/', 10, 1) WITH NOWAIT
 GO
@@ -187,7 +190,6 @@ SET NOCOUNT ON
 	, [Duration_ms] =  ((CAST(DATEDIFF(S, @current_start, @current_end) AS bigint) * 1000000) + (DATEPART(MCS, @current_end)-DATEPART(MCS, @current_start))) / 1000.0
 	, [errornumber] = @@ERROR
 	WHERE [Id] = @current_logitem
-
 
 END
 GO

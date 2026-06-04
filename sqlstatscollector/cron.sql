@@ -202,10 +202,10 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -252,19 +252,23 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT FullName = [FullName]
-     , TableDefinitionHash = [TableDefinitionHash]
+SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 /****** End Section:  Tables ******/
 GO
 
+
 /****** Section:  Stored Procedures ******/
 GO
 
+
 /****** Object:  StoredProcedure [cron].[FillNumbers] ******/
 GO
+
 
 IF OBJECT_ID(N'cron.FillNumbers', N'P') IS NULL
 BEGIN
@@ -309,6 +313,7 @@ GO
 
 /****** Object:  StoredProcedure [cron].[FillDates] ******/
 GO
+
 
 IF OBJECT_ID(N'cron.FillDates', N'P') IS NULL
 BEGIN
