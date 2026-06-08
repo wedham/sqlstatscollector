@@ -11,7 +11,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'databasefile_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x3CE63596CF0A16CFDF4B3344FEAEB8D67392124B4BD1566213BDEC952BD72CAC
+DECLARE @TableDefinitionHash varbinary(32) = 0x011A91B2A9CB71D61B6BB75D680F5C0D946E182E112EAF71359C584D514C36CC
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -50,8 +50,8 @@ BEGIN
 		[max_size_mb] [int] NULL,
 		[growth_mb] [int] NULL,
 		[growth_percent] [int] NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_databasefile_properties] PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
@@ -61,13 +61,15 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'databasefile_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x3CE63596CF0A16CFDF4B3344FEAEB8D67392124B4BD1566213BDEC952BD72CAC
+DECLARE @TableDefinitionHash varbinary(32) = 0x3D36A148ED691536D9766B14F2103F75257FA3AF70C7C2FB62B1B4BB9361E56A
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -106,8 +108,8 @@ BEGIN
 		[max_size_mb] [int] NULL,
 		[growth_mb] [int] NULL,
 		[growth_percent] [int] NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_databasefile_properties] PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
@@ -117,10 +119,11 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-GO
 
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
 
 
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[databasefile_properties] ******/', 10, 1) WITH NOWAIT
@@ -143,11 +146,92 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			+Added MERGE function
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[databasefile_properties]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	MERGE [data].[databasefile_properties] dest
+	USING
+	(
+		SELECT
+			 [serverid]
+			,[database_id]
+			,[file_id]
+			,[type_desc]
+			,[name]
+			,[physical_name]
+			,[state_desc]
+			,[size_mb]
+			,[max_size_mb]
+			,[growth_mb]
+			,[growth_percent]
+			,[LastUpdatedUTC]
+			,[LastHandledUTC]
+		FROM [incoming].[databasefile_properties]
+		WHERE	[serverid] = @serverid
+	) src
+	ON src.[serverid] = dest.[serverid]
+	AND src.[database_id] = dest.[database_id]
+	AND src.[file_id] = dest.[file_id]
+	WHEN NOT MATCHED THEN
+		INSERT 
+			(
+				 [serverid]
+				,[database_id]
+				,[file_id]
+				,[type_desc]
+				,[name]
+				,[physical_name]
+				,[state_desc]
+				,[size_mb]
+				,[max_size_mb]
+				,[growth_mb]
+				,[growth_percent]
+				,[LastUpdatedUTC]
+				,[LastHandledUTC]
+			)
+			VALUES
+			(
+				 src.[serverid]
+				,src.[database_id]
+				,src.[file_id]
+				,src.[type_desc]
+				,src.[name]
+				,src.[physical_name]
+				,src.[state_desc]
+				,src.[size_mb]
+				,src.[max_size_mb]
+				,src.[growth_mb]
+				,src.[growth_percent]
+				,src.[LastUpdatedUTC]
+				,src.[LastHandledUTC]
+			)
+	WHEN MATCHED AND src.[LastUpdatedUTC] <> dest.[LastUpdatedUTC] THEN
+		UPDATE SET
+					 dest.[serverid] = src.[serverid]
+					,dest.[database_id] = src.[database_id]
+					,dest.[file_id] = src.[file_id]
+					,dest.[type_desc] = src.[type_desc]
+					,dest.[name] = src.[name]
+					,dest.[physical_name] = src.[physical_name]
+					,dest.[state_desc] = src.[state_desc]
+					,dest.[size_mb] = src.[size_mb]
+					,dest.[max_size_mb] = src.[max_size_mb]
+					,dest.[growth_mb] = src.[growth_mb]
+					,dest.[growth_percent] = src.[growth_percent]
+					,dest.[LastUpdatedUTC] = src.[LastUpdatedUTC]
+					,dest.[LastHandledUTC] = src.[LastHandledUTC]
+			;
+
+	DELETE FROM [incoming].[databasefile_properties]
+	WHERE [serverid] = @serverid
 END
 GO
 

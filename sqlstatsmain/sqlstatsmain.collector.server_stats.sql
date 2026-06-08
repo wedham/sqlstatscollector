@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'server_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0x2C6583E854976539ED70A91236FD09832362230D464C431AB9C256473E694600
+DECLARE @TableDefinitionHash varbinary(32) = 0xB9C57CFFF9890D051583294504DECBFFB320FACAC3238E9E8B4919F9FDCF7586
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -39,26 +39,28 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [incoming].[server_stats](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[user_connections] [int] NOT NULL,
 		[batch_requests_sec] [int] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_server_stats PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC
+				[rowtimeutc] ASC
 			) ON [PRIMARY]	
 	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'server_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xF638CB5E1741D96BA79AEBAD4D2F6320D7A083EA6A6AA154F9F5D5CA931F453C
+DECLARE @TableDefinitionHash varbinary(32) = 0x4EB0C8F630A154FB97CFA50EBD220142B0039DFD5B51F12B8C084D85E42F9D88
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -87,21 +89,23 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[server_stats](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[user_connections] [int] NOT NULL,
 		[batch_requests_sec] [int] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_server_stats PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC
+				[rowtimeutc] ASC
 			) ON [PRIMARY]	
 	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -126,11 +130,44 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			+Added INSERT IF NOT EXISTS functionality
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[server_stats]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	INSERT INTO [data].[server_stats]
+	(
+		 [serverid]
+		,[rowtimeutc]
+		,[user_connections]
+		,[batch_requests_sec]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	)
+	SELECT
+		 [serverid]
+		,[rowtimeutc]
+		,[user_connections]
+		,[batch_requests_sec]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	FROM [incoming].[server_stats] src
+	WHERE	[serverid] = @serverid 
+			AND NOT EXISTS (	
+							 SELECT 1 
+							 FROM [data].[server_stats] trg 
+							 WHERE	src.[serverid] = trg.[serverid]
+								AND src.[rowtimeutc] = trg.[rowtimeutc]
+							)
+	
+	DELETE FROM [incoming].[server_stats]
+	WHERE [serverid] = @serverid
 END
 GO
 

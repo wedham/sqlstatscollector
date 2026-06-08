@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'wait_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xACF00B1F39BACCDBC69F1D1A3B0C80F6D3C06459D3B8E61FD995B5078DA64191
+DECLARE @TableDefinitionHash varbinary(32) = 0x10697CE98437712382C992FD2B48674A024653E6E03A77E1D5699CC9B6A71CC2
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -39,31 +39,33 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [incoming].[wait_stats](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[wait_type] [nvarchar](127) NOT NULL,
 		[interval_percentage] [decimal](18, 3) NOT NULL,
 		[wait_time_seconds] [decimal](18, 3) NOT NULL,
 		[resource_wait_time_seconds] [decimal](18, 3) NOT NULL,
 		[signal_wait_time_seconds] [decimal](18, 3) NOT NULL,
 		[wait_count] [bigint] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
-		CONSTRAINT PK_data_wait_stats PRIMARY KEY CLUSTERED 
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
+		CONSTRAINT [PK_data_wait_stats] PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[wait_type] ASC
 			) ON [PRIMARY]	
 	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'wait_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0x9B7DAC02326C606FF644EE75B2EA5C7C5C483251DED5FD65D1C40DEF448106CA
+DECLARE @TableDefinitionHash varbinary(32) = 0xBBA75F7A9B3C216B31ED54050C554A5BC8E53772AB369CA18338511494697BCB
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -92,26 +94,28 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[wait_stats](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[wait_type] [nvarchar](127) NOT NULL,
 		[interval_percentage] [decimal](18, 3) NOT NULL,
 		[wait_time_seconds] [decimal](18, 3) NOT NULL,
 		[resource_wait_time_seconds] [decimal](18, 3) NOT NULL,
 		[signal_wait_time_seconds] [decimal](18, 3) NOT NULL,
 		[wait_count] [bigint] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_wait_stats PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[wait_type] ASC
 			) ON [PRIMARY]	
 	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[wait_stats] ******/', 10, 1) WITH NOWAIT
@@ -133,11 +137,53 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			Added INSERT IF NOT EXISTS functionality
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[wait_stats]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	INSERT INTO [data].[wait_stats]
+	(
+		 [serverid]
+		,[rowtimeutc]
+		,[wait_type]
+		,[interval_percentage]
+		,[wait_time_seconds]
+		,[resource_wait_time_seconds]
+		,[signal_wait_time_seconds]
+		,[wait_count]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	)
+	SELECT
+		 [serverid]
+		,[rowtimeutc]
+		,[wait_type]
+		,[interval_percentage]
+		,[wait_time_seconds]
+		,[resource_wait_time_seconds]
+		,[signal_wait_time_seconds]
+		,[wait_count]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	FROM [incoming].[wait_stats] src
+	WHERE	[serverid] = @serverid 
+			AND NOT EXISTS (	
+							 SELECT 1 
+							 FROM [data].[wait_stats] trg 
+							 WHERE	src.[serverid] = trg.[serverid]
+								AND src.[rowtimeutc] = trg.[rowtimeutc]
+								AND src.[wait_type] = trg.[wait_type]
+							)
+	
+	DELETE FROM [incoming].[wait_stats]
+	WHERE [serverid] = @serverid
 END
 GO
 

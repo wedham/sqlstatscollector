@@ -48,9 +48,12 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
+
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'connection_properties'
@@ -92,8 +95,10 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -117,6 +122,7 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[connection_properties]
 AS

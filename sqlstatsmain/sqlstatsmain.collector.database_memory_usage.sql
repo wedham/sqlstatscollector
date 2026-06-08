@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'database_memory_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0xD6F3B5345C01258B7B6E2313531CCF5A1D5E853074757D26C821377C7B4B07C9
+DECLARE @TableDefinitionHash varbinary(32) = 0x04A0B45E296EBD09395DEDED67BBF519AD3C81CF55635468647B114149DB897E
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -39,29 +39,31 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [incoming].[database_memory_usage](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[database_id] [int] NOT NULL,
 		[page_count] [int] NOT NULL,
-		[cached_size_mb] [decimal](15, 2) NOT NULL,
+		[cached_size_mb] [decimal](18, 3) NOT NULL,
 		[buffer_pool_percent] [decimal](5, 2) NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_database_memory_usage PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[database_id] ASC
 			) ON [PRIMARY]
 	) ON [PRIMARY]
-
-SELECT [FullName], [TableDefinitionHash]
-FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 END
+
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'database_memory_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0x98BBD154C744419D1FA2D1AD6E261C080BC9665D199C3323071758A42F222E69
+DECLARE @TableDefinitionHash varbinary(32) = 0x83D013FA03D9307E131A00649DF478565A9BC70732A00D25D163FBD4C82C20A0
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -90,25 +92,27 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[database_memory_usage](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[database_id] [int] NOT NULL,
 		[page_count] [int] NOT NULL,
-		[cached_size_mb] [decimal](15, 2) NOT NULL,
+		[cached_size_mb] [decimal](18, 3) NOT NULL,
 		[buffer_pool_percent] [decimal](5, 2) NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_database_memory_usage PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[database_id] ASC
 			) ON [PRIMARY]
 	) ON [PRIMARY]
-
-SELECT [FullName], [TableDefinitionHash]
-FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 END
 
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
 
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[database_memory_usage] ******/', 10, 1) WITH NOWAIT
 GO
@@ -130,11 +134,49 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2022-05-05	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			+Added INSERT IF NOT EXISTS functionality
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[database_memory_usage]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	INSERT INTO [data].[database_memory_usage]
+	(
+		 [serverid]
+		,[rowtimeutc]
+		,[database_id]
+		,[page_count]
+		,[cached_size_mb]
+		,[buffer_pool_percent]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	)
+	SELECT
+		 [serverid]
+		,[rowtimeutc]
+		,[database_id]
+		,[page_count]
+		,[cached_size_mb]
+		,[buffer_pool_percent]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	FROM [incoming].[database_memory_usage] src
+	WHERE	[serverid] = @serverid 
+			AND NOT EXISTS (	
+							 SELECT 1 
+							 FROM [data].[database_memory_usage] trg 
+							 WHERE	src.[serverid] = trg.[serverid]
+								AND src.[rowtimeutc] = trg.[rowtimeutc]
+								AND src.[database_id] = trg.[database_id]
+							)
+	
+	DELETE FROM [incoming].[database_memory_usage]
+	WHERE [serverid] = @serverid
 END
 GO
 

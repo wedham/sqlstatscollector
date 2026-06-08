@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'databasefile_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0x930ED87702D7439D3A51957B350D9CD130E1B27AE84444BE322AF363F700C263
+DECLARE @TableDefinitionHash varbinary(32) = 0xCEC79894EC9386B92B5591C248969CAFAD9C26F335BBC55611258130AFBFFB01
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -39,7 +39,7 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [incoming].[databasefile_stats](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[database_id] [int] NOT NULL,
 		[file_id] [int] NOT NULL,
 		[size_mb] [decimal](19, 4) NOT NULL,
@@ -50,25 +50,27 @@ BEGIN
 		[num_of_writes] [bigint] NOT NULL,
 		[num_of_bytes_written] [bigint] NOT NULL,
 		[io_stall_write_ms] [bigint] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_databasefile_stats PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[database_id] ASC,
 				[file_id] ASC
 			) ON [PRIMARY]	
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'databasefile_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xBD73573EC0463FE799113A2D693B23128DB36A21852CF2E7FD1AB9DE6B5C1DBB
+DECLARE @TableDefinitionHash varbinary(32) = 0x0C3CA919BBAEE387DFB234AEB10FC5F8FD6C4C68E323D590054F1FA2288354AE
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -97,7 +99,7 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[databasefile_stats](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[database_id] [int] NOT NULL,
 		[file_id] [int] NOT NULL,
 		[size_mb] [decimal](19, 4) NOT NULL,
@@ -108,22 +110,23 @@ BEGIN
 		[num_of_writes] [bigint] NOT NULL,
 		[num_of_bytes_written] [bigint] NOT NULL,
 		[io_stall_write_ms] [bigint] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_databasefile_stats PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[database_id] ASC,
 				[file_id] ASC
 			) ON [PRIMARY]	
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-GO
 
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
 
 
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[databasefile_stats] ******/', 10, 1) WITH NOWAIT
@@ -146,11 +149,62 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			+Added INSERT IF NOT EXISTS functionality
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[databasefile_stats]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	INSERT INTO [data].[databasefile_stats]
+	(
+		 [serverid]
+		,[rowtimeutc]
+		,[database_id]
+		,[file_id]
+		,[size_mb]
+		,[freespace_mb]
+		,[num_of_reads]
+		,[num_of_bytes_read]
+		,[io_stall_read_ms]
+		,[num_of_writes]
+		,[num_of_bytes_written]
+		,[io_stall_write_ms]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	)
+	SELECT
+		 [serverid]
+		,[rowtimeutc]
+		,[database_id]
+		,[file_id]
+		,[size_mb]
+		,[freespace_mb]
+		,[num_of_reads]
+		,[num_of_bytes_read]
+		,[io_stall_read_ms]
+		,[num_of_writes]
+		,[num_of_bytes_written]
+		,[io_stall_write_ms]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	FROM [incoming].[databasefile_stats] src
+	WHERE	[serverid] = @serverid 
+			AND NOT EXISTS (	
+							 SELECT 1 
+							 FROM [data].[databasefile_stats] trg 
+							 WHERE	src.[serverid] = trg.[serverid]
+								AND src.[rowtimeutc] = trg.[rowtimeutc]
+								AND src.[database_id] = trg.[database_id]
+								AND src.[file_id] = trg.[file_id]
+							)
+	
+	DELETE FROM [incoming].[databasefile_stats]
+	WHERE [serverid] = @serverid
 END
 GO
 

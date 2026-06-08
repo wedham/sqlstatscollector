@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'database_cpu_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0x84E03A541EA3EA69608469565900DE884DD69BA5C3B1267352B7AF75AFF45000
+DECLARE @TableDefinitionHash varbinary(32) = 0xDC1C7E95D31F3FC26F9C62413D7D3410B55A264200207623882DC932D14988AC
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -39,29 +39,31 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [incoming].[database_cpu_usage](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[database_id] [int] NOT NULL,
 		[cpu_time_ms] [decimal](18, 3) NOT NULL,
 		[cpu_percent] [decimal](5, 2) NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_database_cpu_usage PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[database_id] ASC
 			) ON [PRIMARY]
 	) ON [PRIMARY]
 
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'database_cpu_usage'
-DECLARE @TableDefinitionHash varbinary(32) = 0x058AEC8E37D8AFDF72CF2CED63C2B1C2118B6E4BE37F4331383B4EE06EA9587E
+DECLARE @TableDefinitionHash varbinary(32) = 0xD7F3FF7BCA11B9BDB0FA984E238F09BF8CCAE568B94645EE82BA72F6A0B793E5
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -90,24 +92,26 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[database_cpu_usage](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](7) NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[database_id] [int] NOT NULL,
 		[cpu_time_ms] [decimal](18, 3) NOT NULL,
 		[cpu_percent] [decimal](5, 2) NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		CONSTRAINT PK_data_database_cpu_usage PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
-				[rowtime] ASC,
+				[rowtimeutc] ASC,
 				[database_id] ASC
 			) ON [PRIMARY]
 	) ON [PRIMARY]
 
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -131,11 +135,47 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			+Added INSERT IF NOT EXISTS functionality
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[database_cpu_usage]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	INSERT INTO [data].[database_cpu_usage]
+	(
+		 [serverid]
+		,[rowtimeutc]
+		,[database_id]
+		,[cpu_time_ms]
+		,[cpu_percent]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	)
+	SELECT
+		 [serverid]
+		,[rowtimeutc]
+		,[database_id]
+		,[cpu_time_ms]
+		,[cpu_percent]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	FROM [incoming].[database_cpu_usage] src
+	WHERE	[serverid] = @serverid 
+			AND NOT EXISTS (	
+							 SELECT 1 
+							 FROM [data].[database_cpu_usage] trg 
+							 WHERE	src.[serverid] = trg.[serverid]
+								AND src.[rowtimeutc] = trg.[rowtimeutc]
+								AND src.[database_id] = trg.[database_id]
+							)
+	
+	DELETE FROM [incoming].[database_cpu_usage]
+	WHERE [serverid] = @serverid
 END
 GO
 

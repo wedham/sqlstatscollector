@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'availability_group_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0xB15F79BC5CA338C42F2C0D1B3076CA39497EF621BA09C82CB5DA93D01309BB95
+DECLARE @TableDefinitionHash varbinary(32) = 0x38CFF59F5A74EDF914E0DF58C5CDC433367723DD5C0B2EE3BBD0FFD2FF8402BA
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -44,19 +44,21 @@ BEGIN
 		[primary_replica] [nvarchar](128) NOT NULL,
 		[recovery_health_desc] [nvarchar](60) NULL,
 		[synchronization_health_desc] [nvarchar](60) NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'availability_group_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0xD6E660F41891D5F8521A6978D2164632A3575A2CC5091724D501EBF5E711BCDD
+DECLARE @TableDefinitionHash varbinary(32) = 0x2F2B47122309C1B6E0FE935A723500724AA4E8559CD9BEE88A93253E4D3D9F71
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -90,8 +92,8 @@ BEGIN
 		[primary_replica] [nvarchar](128) NOT NULL,
 		[recovery_health_desc] [nvarchar](60) NULL,
 		[synchronization_health_desc] [nvarchar](60) NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_availability_group_properties] PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
@@ -100,8 +102,10 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -125,11 +129,71 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-03	Marcus Petö			+Added MERGE function
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[availability_group_properties]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	MERGE [data].[availability_group_properties] dest
+	USING
+	(
+		SELECT
+			 [serverid]
+			,[group_id]
+			,[name]
+			,[primary_replica]
+			,[recovery_health_desc]
+			,[synchronization_health_desc]
+			,[LastUpdatedUTC]
+			,[LastHandledUTC]
+		FROM [incoming].[availability_group_properties]
+		WHERE	[serverid] = @serverid
+	) src
+	ON src.[serverid] = dest.[serverid]
+	AND src.[group_id] = dest.[group_id]
+	WHEN NOT MATCHED THEN
+		INSERT 
+			(
+				 [serverid]
+				,[group_id]
+				,[name]
+				,[primary_replica]
+				,[recovery_health_desc]
+				,[synchronization_health_desc]
+				,[LastUpdatedUTC]
+				,[LastHandledUTC]
+			)
+			VALUES
+			(
+				 src.[serverid]
+				,src.[group_id]
+				,src.[name]
+				,src.[primary_replica]
+				,src.[recovery_health_desc]
+				,src.[synchronization_health_desc]
+				,src.[LastUpdatedUTC]
+				,src.[LastHandledUTC]
+			)
+	WHEN MATCHED AND src.[LastUpdatedUTC] <> dest.[LastUpdatedUTC] THEN
+		UPDATE SET
+				 dest.[serverid] = src.[serverid]
+				,dest.[group_id] = src.[group_id]
+				,dest.[name] = src.[name]
+				,dest.[primary_replica] = src.[primary_replica]
+				,dest.[recovery_health_desc] =  src.[recovery_health_desc]
+				,dest.[synchronization_health_desc] = src.[synchronization_health_desc]
+				,dest.[LastUpdatedUTC] = src.[LastUpdatedUTC]
+				,dest.[LastHandledUTC] = src.[LastHandledUTC]
+			;
+
+	DELETE FROM [incoming].[availability_group_properties]
+	WHERE [serverid] = @serverid
 END
 GO
 

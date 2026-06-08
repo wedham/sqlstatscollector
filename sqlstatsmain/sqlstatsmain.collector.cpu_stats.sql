@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'cpu_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xBF80863C03B501C01AFB166FC487C7B490096AF8A24CEDC193C86BEEBB62140F
+DECLARE @TableDefinitionHash varbinary(32) = 0x8EFD5384F21DFAFE4E146B5085A4207C851E5BA0153140A226A8DD1F62C983BB
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -38,31 +38,32 @@ BEGIN
 	SELECT @msg = N'Creating ' + @FullName
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [incoming].[cpu_stats](
-	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](3) NOT NULL,
-		[rowdate] [date] NOT NULL,
+		[serverid] [uniqueidentifier] NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[record_id] [int] NOT NULL,
 		[idle_cpu] [int] NOT NULL,
 		[sql_cpu] [int] NOT NULL,
 		[other_cpu] [int] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
-		 CONSTRAINT [PK_cpu_stats] PRIMARY KEY CLUSTERED 
-			(
-				[serverid] ASC,
-				[rowdate] ASC,
-				[record_id] ASC
-			) ON [PRIMARY]
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
+		CONSTRAINT [PK_cpu_stats] PRIMARY KEY CLUSTERED 
+		(
+			  [serverid] ASC
+			, [rowtimeutc] ASC
+			, [record_id] ASC
 		) ON [PRIMARY]
+	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'cpu_stats'
-DECLARE @TableDefinitionHash varbinary(32) = 0xB7F1FCD687797587F695A7EC77494268859CF61915F342EAE1317B9B707C19E4
+DECLARE @TableDefinitionHash varbinary(32) = 0x0946F0033F03C0E8B27B8C60AB64E0C02A49FFC5CBF9D8732A712914CB205A57
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -91,27 +92,27 @@ BEGIN
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[cpu_stats](
 	    [serverid] [uniqueidentifier] NOT NULL,
-		[rowtime] [datetime2](3) NOT NULL,
-		[rowdate] [date] NOT NULL,
+		[rowtimeutc] [datetime2](7) NOT NULL,
 		[record_id] [int] NOT NULL,
 		[idle_cpu] [int] NOT NULL,
 		[sql_cpu] [int] NOT NULL,
 		[other_cpu] [int] NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
-		 CONSTRAINT [PK_cpu_stats] PRIMARY KEY CLUSTERED 
-			(
-				[serverid] ASC,
-				[rowdate] ASC,
-				[record_id] ASC
-			) ON [PRIMARY]
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
+		CONSTRAINT [PK_cpu_stats] PRIMARY KEY CLUSTERED 
+		(
+			  [serverid]
+			, [rowtimeutc] ASC
+			, [record_id] ASC
 		) ON [PRIMARY]
+	) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-GO
 
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
 
 
 RAISERROR(N'/****** Object:  StoredProcedure [transfer].[cpu_stats] ******/', 10, 1) WITH NOWAIT
@@ -134,11 +135,49 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			+Added INSERT IF NOT EXISTS functionality
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[cpu_stats]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	INSERT INTO [data].[cpu_stats]
+	(
+		 [serverid]
+		,[rowtimeutc]
+		,[record_id]
+		,[idle_cpu]
+		,[sql_cpu]
+		,[other_cpu]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	)
+	SELECT
+		 [serverid]
+		,[rowtimeutc]
+		,[record_id]
+		,[idle_cpu]
+		,[sql_cpu]
+		,[other_cpu]
+		,[LastUpdatedUTC]
+		,[LastHandledUTC]
+	FROM [incoming].[cpu_stats] src
+	WHERE	[serverid] = @serverid 
+			AND NOT EXISTS (	
+							 SELECT 1 
+							 FROM [data].[cpu_stats] trg 
+							 WHERE	src.[serverid] = trg.[serverid]
+								AND src.[rowtimeutc] = trg.[rowtimeutc]
+								AND src.[record_id] = trg.[record_id]
+							)
+
+	DELETE FROM [incoming].[cpu_stats]
+	WHERE [serverid] = @serverid
 END
 GO
 

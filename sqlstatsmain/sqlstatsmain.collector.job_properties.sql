@@ -10,7 +10,7 @@ GO
 
 DECLARE @SchemaName nvarchar(128) = N'incoming'
 DECLARE @TableName nvarchar(128) = N'job_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0x64DEF7CC6E8BC9724A2033A815802A5233E17E80512C1A70D60172F0554B5C71
+DECLARE @TableDefinitionHash varbinary(32) = 0xDF95EA9A90DC6C49D0A0C634C9E8D10432817352369D6696212BE879BBAD598C
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -50,8 +50,8 @@ BEGIN
 		[last_startdate] [datetime] NOT NULL,
 		[last_duration] [decimal](18, 3) NOT NULL,
 		[run_duration_avg] [decimal](18, 3) NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_job_properties] PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
@@ -60,13 +60,15 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 DECLARE @SchemaName nvarchar(128) = N'data'
 DECLARE @TableName nvarchar(128) = N'job_properties'
-DECLARE @TableDefinitionHash varbinary(32) = 0xD8B069FB9D800DF432952FD6A96E5A1E556915B628F93CA3E9C2103D6296D336
+DECLARE @TableDefinitionHash varbinary(32) = 0x6AD2AD32758CF0E67BF88E05D1DFB316FCB475026DBEEAD1772BF63319362152
 
 DECLARE @TableExists int
 DECLARE @TableHasChanged int
@@ -106,8 +108,8 @@ BEGIN
 		[last_startdate] [datetime] NOT NULL,
 		[last_duration] [decimal](18, 3) NOT NULL,
 		[run_duration_avg] [decimal](18, 3) NOT NULL,
-		[LastUpdated] [datetime2](7) NOT NULL,
-		[LastHandled] [datetime2](7) NULL,
+		[LastUpdatedUTC] [datetime2](7) NOT NULL,
+		[LastHandledUTC] [datetime2](7) NULL,
 		 CONSTRAINT [PK_job_properties] PRIMARY KEY CLUSTERED 
 			(
 				[serverid] ASC,
@@ -116,8 +118,10 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT [FullName], [TableDefinitionHash]
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -142,11 +146,95 @@ GO
 Date		Name				Description
 ----------	-------------		-----------------------------------------------
 2024-02-21	Mikael Wedham		+Created v1
+2026-02-04	Marcus Petö			+Added MERGE function
+2026-06-08	Mikael Wedham		Adapted datatypes and column names to history v1
 *******************************************************************************/
 ALTER PROCEDURE [transfer].[job_properties]
+(
+	@serverid [uniqueidentifier]
+)
 AS
 BEGIN
 	SET NOCOUNT ON
+
+	MERGE [data].[job_properties] dest
+	USING
+	(
+		SELECT
+			 [serverid]
+			,[job_id]
+			,[job_name]
+			,[description]
+			,[job_category]
+			,[job_owner]
+			,[enabled]
+			,[notify_email_desc]
+			,[run_status_desc]
+			,[last_startdate]
+			,[last_duration]
+			,[run_duration_avg]
+			,[LastUpdatedUTC]
+			,[LastHandledUTC]
+		FROM [incoming].[job_properties]
+		WHERE	[serverid] = @serverid
+	) src
+	ON src.[serverid] = dest.[serverid]
+	AND src.[job_id] = dest.[job_id]
+	WHEN NOT MATCHED THEN
+		INSERT 
+			(
+				 [serverid]
+				,[job_id]
+				,[job_name]
+				,[description]
+				,[job_category]
+				,[job_owner]
+				,[enabled]
+				,[notify_email_desc]
+				,[run_status_desc]
+				,[last_startdate]
+				,[last_duration]
+				,[run_duration_avg]
+				,[LastUpdatedUTC]
+				,[LastHandledUTC]
+			)
+			VALUES
+			(
+				 src.[serverid]
+				,src.[job_id]
+				,src.[job_name]
+				,src.[description]
+				,src.[job_category]
+				,src.[job_owner]
+				,src.[enabled]
+				,src.[notify_email_desc]
+				,src.[run_status_desc]
+				,src.[last_startdate]
+				,src.[last_duration]
+				,src.[run_duration_avg]
+				,src.[LastUpdatedUTC]
+				,src.[LastHandledUTC]
+			)
+	WHEN MATCHED AND src.[LastUpdatedUTC] <> dest.[LastUpdatedUTC] THEN
+		UPDATE SET
+					 dest.[serverid] = src.[serverid]
+					,dest.[job_id] = src.[job_id]
+					,dest.[job_name] = src.[job_name]
+					,dest.[description] = src.[description]
+					,dest.[job_category] = src.[job_category]
+					,dest.[job_owner] = src.[job_owner]
+					,dest.[enabled] = src.[enabled]
+					,dest.[notify_email_desc] = src.[notify_email_desc]
+					,dest.[run_status_desc] = src.[run_status_desc]
+					,dest.[last_startdate] = src.[last_startdate]
+					,dest.[last_duration] = src.[last_duration]
+					,dest.[run_duration_avg] = src.[run_duration_avg]
+					,dest.[LastUpdatedUTC] = src.[LastUpdatedUTC]
+					,dest.[LastHandledUTC] = src.[LastHandledUTC]
+			;
+
+	DELETE FROM [incoming].[job_properties]
+	WHERE [serverid] = @serverid
 END
 GO
 
