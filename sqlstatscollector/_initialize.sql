@@ -17,8 +17,12 @@ GO
 ALTER DATABASE [$(DatabaseName)] SET RECOVERY SIMPLE WITH NO_WAIT
 GO
 
-ALTER DATABASE [$(DatabaseName)] SET CONTAINMENT = PARTIAL WITH NO_WAIT
-GO
+--EXEC sys.sp_configure N'contained database authentication', N'1'
+--GO
+--RECONFIGURE WITH OVERRIDE
+--GO
+--ALTER DATABASE [$(DatabaseName)] SET CONTAINMENT = PARTIAL WITH NO_WAIT
+--GO
 
 USE [$(DatabaseName)]
 GO
