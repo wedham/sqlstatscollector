@@ -63,7 +63,7 @@ BEGIN
 		) ON [PRIMARY]
 END
 
-SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
 RAISERROR(@msg, 10, 1) WITH NOWAIT
@@ -113,7 +113,7 @@ BEGIN
 	) ON [PRIMARY]
 END
 
-SELECT @msg = N'Table ' + [FullName] + ' was found with checksum ' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
 RAISERROR(@msg, 10, 1) WITH NOWAIT
