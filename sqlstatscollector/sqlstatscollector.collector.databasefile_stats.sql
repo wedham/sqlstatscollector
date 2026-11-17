@@ -148,6 +148,7 @@ Date		Name				Description
 2024-01-19	Mikael Wedham		+Added logging of duration
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
+2026-11-17	Mikael Wedham		NOLOCK hint added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[databasefile_stats]
 AS
@@ -199,15 +200,15 @@ SET NOCOUNT ON
 		BEGIN
 			INSERT INTO @databases([name] , [database_id] , [file_id] , [file_name])
 			SELECT d.[name], d.[database_id], f.[file_id], f.[name]
-				FROM sys.databases d INNER JOIN sys.master_files f ON d.[database_id] = f.[database_id]
+				FROM sys.databases d WITH(NOLOCK) INNER JOIN sys.master_files f WITH(NOLOCK) ON d.[database_id] = f.[database_id]
 				WHERE d.[state_desc] = 'ONLINE'
 		END
 		ELSE
 		BEGIN
 			INSERT INTO @databases([name] , [database_id] , [file_id] , [file_name])
 			SELECT d.[name], d.[database_id], f.[file_id], f.[name]
-				FROM sys.databases d INNER JOIN sys.master_files f ON d.[database_id] = f.[database_id]
-				LEFT OUTER JOIN sys.dm_hadr_availability_replica_states rs
+				FROM sys.databases d WITH(NOLOCK) INNER JOIN sys.master_files f WITH(NOLOCK) ON d.[database_id] = f.[database_id]
+				LEFT OUTER JOIN sys.dm_hadr_availability_replica_states rs WITH(NOLOCK)
 				ON rs.[replica_id] = d.[replica_id]
 				WHERE d.[state_desc] = 'ONLINE'
 				AND ISNULL(rs.[role_desc], N'PRIMARY') = N'PRIMARY'
@@ -272,7 +273,7 @@ SET NOCOUNT ON
 			, fs.num_of_writes
 			, fs.num_of_bytes_written
 			, fs.io_stall_write_ms 
-		FROM sys.master_files f INNER JOIN @sizeresults s
+		FROM sys.master_files f WITH(NOLOCK) INNER JOIN @sizeresults s
 		ON s.[database_id] = f.[database_id] AND s.[file_id] = f.[file_id]
 		INNER JOIN io_virtual_file_stats fs
 		ON f.[database_id] = fs.[database_id] AND f.[file_id] = fs.[file_id] 

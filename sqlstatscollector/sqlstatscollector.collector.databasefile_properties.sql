@@ -43,6 +43,7 @@ BEGIN
 	SELECT @msg = N'Creating ' + @FullName
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[databasefile_properties](
+		[collector_rowguid] [uniqueidentifier] NOT NULL CONSTRAINT [df_databasefile_properties_rowguid] DEFAULT NEWID() ROWGUIDCOL,
 		[database_id] [int] NOT NULL,
 		[file_id] [int] NOT NULL,
 		[type_desc] [nvarchar](60) NOT NULL,
@@ -91,33 +92,13 @@ SELECT @FullName = [FullName]
      , @TableHasChanged = [TableHasChanged]
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
-IF @TableExists = 1 AND @TableHasChanged = 1
+IF @TableExists = 1 
 BEGIN
 	SELECT @cmd = N'DROP TABLE ' + @FullName
 	RAISERROR(@cmd, 10, 1) WITH NOWAIT
 	EXEC (@cmd)
-	SET @TableExists = 0
 END
 
-
-IF @TableExists = 0
-BEGIN
-	SELECT @msg = N'Creating ' + @FullName
-	RAISERROR(@msg, 10, 1) WITH NOWAIT
-	CREATE TABLE [data].[databasefile_properties_changes](
-		[rowtimeutc] [datetime2](7) NOT NULL,
-		[database_id] [int] NOT NULL,
-		[file_id] [int] NOT NULL,
-		[propertyname] [nvarchar](128) NOT NULL,
-		[old_value] [nvarchar](256) NOT NULL,
-		[new_value] [nvarchar](256) NOT NULL,
-	) ON [PRIMARY]
-END
-
-SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
-FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-
-RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -132,8 +113,8 @@ AFTER UPDATE
 AS
 BEGIN
 
-    INSERT INTO [data].[databasefile_properties_changes] ([rowtimeutc], [database_id], [file_id], [propertyname], [old_value], [new_value])
-    SELECT i.[LastUpdatedUTC], i.[database_id], i.[file_id], changedata.propertyname, changedata.old_value, changedata.new_value
+    INSERT INTO [data].[collector_changes] ([rowtimeutc], [collector_rowguid], [collectorname] , [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[collector_rowguid], N'databasefile_properties', changedata.propertyname, changedata.old_value, changedata.new_value
     FROM inserted i INNER JOIN deleted d ON i.[database_id] = d.[database_id] AND i.[file_id] = d.[file_id] 
     CROSS APPLY ( VALUES 
     -- Insert a list of columns for change tracking here.
@@ -186,6 +167,7 @@ Date		Name				Description
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-06-03	Mikael Wedham		History functionality added
+2026-11-17	Mikael Wedham		NOLOCK hint added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[databasefile_properties]
 AS
@@ -219,7 +201,7 @@ SET NOCOUNT ON
 								ELSE CAST(f.[growth]/128.0 as int) END --NULL if growth is percent
 			, [growth_percent] = CASE WHEN f.[is_percent_growth] = 0 THEN NULL
 								ELSE f.[growth] END --NULL if growth is in megabytes
-		FROM sys.master_files f ) src
+		FROM sys.master_files f WITH(NOLOCK) ) src
 		ON src.[database_id] = dest.[database_id] AND src.[file_id] = dest.[file_id]  
 		WHEN NOT MATCHED THEN
 			INSERT ([database_id], [file_id], [type_desc], [name], [physical_name], [state_desc]
@@ -307,6 +289,7 @@ BEGIN
 
 		DECLARE @fp TABLE (
 		[serverid] [uniqueidentifier] NOT NULL,
+		[collector_rowguid] [uniqueidentifier] NOT NULL,
 		[database_id] [int] NOT NULL,
 		[file_id] [int] NOT NULL,
 		[type_desc] [nvarchar](60) NOT NULL,
@@ -324,7 +307,8 @@ BEGIN
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
 	OUTPUT @serverid serverid 
-	     , inserted.[database_id]
+		 , inserted.[collector_rowguid]
+         , inserted.[database_id]
 		 , inserted.[file_id]
 		 , inserted.[type_desc]
 		 , inserted.[name]
@@ -341,7 +325,8 @@ BEGIN
 	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
 
     SELECT fp.serverid 
-	     , fp.[database_id]
+		 , fp.[collector_rowguid]
+         , fp.[database_id]
 		 , fp.[file_id]
 		 , fp.[type_desc]
 		 , fp.[name]

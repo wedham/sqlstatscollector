@@ -43,6 +43,7 @@ BEGIN
 	SELECT @msg = N'Creating ' + @FullName
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[database_properties](
+		[collector_rowguid] [uniqueidentifier] NOT NULL CONSTRAINT [df_database_properties_rowguid] DEFAULT NEWID() ROWGUIDCOL,
 		[database_id] [int] NOT NULL,
 		[name] [nvarchar](128) NOT NULL,
 		[owner_sid] [varbinary](85) NOT NULL,
@@ -102,33 +103,13 @@ SELECT @FullName = [FullName]
      , @TableHasChanged = [TableHasChanged]
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
-IF @TableExists = 1 AND @TableHasChanged = 1
+IF @TableExists = 1
 BEGIN
 	SELECT @cmd = N'DROP TABLE ' + @FullName
 	RAISERROR(@cmd, 10, 1) WITH NOWAIT
 	EXEC (@cmd)
-	SET @TableExists = 0
 END
 
-
-IF @TableExists = 0
-BEGIN
-	SELECT @msg = N'Creating ' + @FullName
-	RAISERROR(@msg, 10, 1) WITH NOWAIT
-	CREATE TABLE [data].[database_properties_changes](
-		[rowtimeutc] [datetime2](7) NOT NULL,
-		[database_id] [int] NOT NULL,
-		[name] [nvarchar](128) NOT NULL,
-		[propertyname] [nvarchar](128) NOT NULL,
-		[old_value] [nvarchar](256) NOT NULL,
-		[new_value] [nvarchar](256) NOT NULL,
-	) ON [PRIMARY]
-END
-
-SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
-FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-
-RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -143,8 +124,8 @@ AFTER UPDATE
 AS
 BEGIN
 
-    INSERT INTO [data].[database_properties_changes] ([rowtimeutc], [database_id], [name], [propertyname], [old_value], [new_value])
-    SELECT i.[LastUpdatedUTC], i.[database_id], i.[name], changedata.propertyname, changedata.old_value, changedata.new_value
+    INSERT INTO [data].[collector_changes] ([rowtimeutc], [collector_rowguid], [collectorname] , [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[collector_rowguid], N'database_properties', changedata.propertyname, changedata.old_value, changedata.new_value
     FROM inserted i INNER JOIN deleted d ON i.[database_id] = d.[database_id] AND i.[name] = d.[name] 
     CROSS APPLY ( VALUES 
     -- Insert a list of columns for change tracking here.
@@ -210,6 +191,7 @@ Date		Name				Description
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-05-27	Mikael Wedham		Fix for reusable databaseids Issue #6
 2026-06-03	Mikael Wedham		History functionality added
+2026-11-17	Mikael Wedham		NOLOCK hint added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[database_properties]
 AS
@@ -251,7 +233,7 @@ SET NOCOUNT ON
 		BEGIN
 			INSERT INTO @databases([name])
 			SELECT d.[name]
-				FROM sys.databases d
+				FROM sys.databases d WITH(NOLOCK)
 				WHERE d.[name] NOT IN ('tempdb')
 				AND d.[state_desc] = 'ONLINE'
 		END
@@ -259,7 +241,7 @@ SET NOCOUNT ON
 		BEGIN
 			INSERT INTO @databases([name])
 			SELECT d.[name]
-				FROM sys.databases d LEFT OUTER JOIN sys.dm_hadr_availability_replica_states rs
+				FROM sys.databases d WITH(NOLOCK) LEFT OUTER JOIN sys.dm_hadr_availability_replica_states rs WITH(NOLOCK)
 				ON rs.replica_id = d.replica_id
 				WHERE d.[name] NOT IN ('tempdb')
 				AND d.[state_desc] = 'ONLINE'
@@ -335,22 +317,22 @@ SET NOCOUNT ON
 			, diffbackup.[LastDiffBackupTime]
 			, logbackup.[LastLogBackupTime]
 			, LastKnownGoodDBCCTime = dbccresults.[dbccLastKnownGood]
-		FROM sys.databases d LEFT OUTER JOIN @dbccresults dbccresults ON dbccresults.[database_name] = d.[name] 
+		FROM sys.databases d WITH(NOLOCK) LEFT OUTER JOIN @dbccresults dbccresults ON dbccresults.[database_name] = d.[name] 
 		CROSS APPLY ( /* Find the last backup of type 'Full' */
 			SELECT [LastFullBackupTime] = MAX(bus.[backup_finish_date]) 
-			FROM dbo.backupset bus
+			FROM dbo.backupset bus WITH(NOLOCK)
 			WHERE bus.[type] = 'D'
 			AND bus.[database_name] = d.[name]
 			) fullbackup
 		CROSS APPLY ( /* Find the last backup of type 'Differential' */
 			SELECT [LastDiffBackupTime] = MAX(bus.[backup_finish_date]) 
-			FROM dbo.backupset bus
+			FROM dbo.backupset bus WITH(NOLOCK)
 			WHERE bus.[type] = 'I'
 			AND bus.[database_name] = d.[name]
 			) diffbackup
 		CROSS APPLY ( /* Find the last backup of type 'Log' */
 			SELECT [LastLogBackupTime] = MAX(bus.[backup_finish_date]) 
-			FROM dbo.backupset bus
+			FROM dbo.backupset bus WITH(NOLOCK)
 			WHERE bus.[type] = 'L'
 			AND bus.[database_name] = d.[name]
 			) logbackup
@@ -447,6 +429,7 @@ BEGIN
 
 	DECLARE @database_properties TABLE (
 		[serverid] [uniqueidentifier] NOT NULL,
+		[collector_rowguid] [uniqueidentifier] NOT NULL,
 		[database_id] [int] NOT NULL,
 		[name] [nvarchar](128) NOT NULL,
 		[owner_sid] [varbinary](85) NOT NULL,
@@ -476,7 +459,8 @@ BEGIN
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
 	OUTPUT @serverid serverid 
-	     , inserted.[database_id]
+	 	 , inserted.[collector_rowguid]
+         , inserted.[database_id]
 		 , inserted.[name]
 		 , inserted.[owner_sid]
 		 , inserted.[create_date]
@@ -504,6 +488,7 @@ BEGIN
 	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
 
 	SELECT dp.serverid 
+	     , dp.[collector_rowguid]
 	     , dp.[database_id]
 		 , dp.[name]
 		 , dp.[owner_sid]

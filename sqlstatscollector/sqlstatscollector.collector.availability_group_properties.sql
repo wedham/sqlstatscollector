@@ -43,6 +43,7 @@ BEGIN
 	SELECT @msg = N'Creating ' + @FullName
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[availability_group_properties](
+		[collector_rowguid] [uniqueidentifier] NOT NULL CONSTRAINT [df_availability_group_properties_rowguid] DEFAULT NEWID() ROWGUIDCOL,
 		[database_id] [int] NOT NULL,
 		[replica_id] [uniqueidentifier] NOT NULL,
 		[group_id] [uniqueidentifier] NOT NULL,
@@ -101,32 +102,12 @@ SELECT @FullName = [FullName]
      , @TableHasChanged = [TableHasChanged]
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
-IF @TableExists = 1 AND @TableHasChanged = 1
+IF @TableExists = 1 
 BEGIN
 	SELECT @cmd = N'DROP TABLE ' + @FullName
 	RAISERROR(@cmd, 10, 1) WITH NOWAIT
 	EXEC (@cmd)
-	SET @TableExists = 0
 END
-
-IF @TableExists = 0
-BEGIN
-	SELECT @msg = N'Creating ' + @FullName
-	RAISERROR(@msg, 10, 1) WITH NOWAIT
-	CREATE TABLE [data].[availability_group_properties_changes](
-		[rowtimeutc] [datetime2](7) NOT NULL,
-		[group_database_id] [uniqueidentifier] NOT NULL,
-		[replica_id] [uniqueidentifier] NOT NULL,
-		[propertyname] [nvarchar](128) NOT NULL,
-		[old_value] [nvarchar](256) NOT NULL,
-		[new_value] [nvarchar](256) NOT NULL,
-	) ON [PRIMARY]
-END
-
-SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
-FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-
-RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -141,8 +122,8 @@ AFTER UPDATE
 AS
 BEGIN
 
-    INSERT INTO [data].[availability_group_properties_changes] ([rowtimeutc], [group_database_id], [replica_id], [propertyname], [old_value], [new_value])
-    SELECT i.[LastUpdatedUTC], i.[group_database_id], i.[replica_id], changedata.propertyname, changedata.old_value, changedata.new_value
+    INSERT INTO [data].[collector_changes] ([rowtimeutc], [collector_rowguid], [collectorname] , [propertyname], [old_value], [new_value])
+   SELECT i.[LastUpdatedUTC], i.[collector_rowguid], N'availability_group_properties', changedata.propertyname, changedata.old_value, changedata.new_value
     FROM inserted i INNER JOIN deleted d ON i.[group_database_id] = d.[group_database_id] AND i.[replica_id] = d.[replica_id]
     CROSS APPLY ( VALUES 
     -- Insert a list of columns for change tracking here.
@@ -204,6 +185,7 @@ Date		Name				Description
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-04-01	Mikael Wedham		Added replica state information
 2026-06-02	Mikael Wedham		History functionality added
+2026-11-17	Mikael Wedham		NOLOCK hint added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[availability_group_properties]
 AS
@@ -254,7 +236,7 @@ SET NOCOUNT ON
 				SELECT primary_last_commit_time = dbr.last_commit_time
 					 , dbr.group_id
 					 , dbr.group_database_id
-				FROM sys.dm_hadr_database_replica_states AS dbr
+				FROM sys.dm_hadr_database_replica_states dbr WITH(NOLOCK)
 				WHERE dbr.is_primary_replica = 1
 			), cte_availability_group_properties AS
 			(
@@ -288,21 +270,21 @@ SET NOCOUNT ON
 										  ELSE CONVERT (nvarchar, DATEADD(ms, DATEDIFF(ss, drs.last_commit_time, primary_last_commit_time) * 1000, 0), 114)
 									 END
 					, [LastUpdatedUTC] = SYSUTCDATETIME()
-				FROM sys.availability_groups ag 
-					INNER JOIN sys.dm_hadr_availability_group_states ags 
+				FROM sys.availability_groups ag  WITH(NOLOCK)
+					INNER JOIN sys.dm_hadr_availability_group_states ags  WITH(NOLOCK)
 							ON ag.group_id = ags.group_id
-					INNER JOIN sys.dm_hadr_database_replica_states drs 
+					INNER JOIN sys.dm_hadr_database_replica_states drs  WITH(NOLOCK)
 							ON drs.group_id = ag.group_id
-					LEFT OUTER JOIN sys.dm_hadr_database_replica_cluster_states drcs 
+					LEFT OUTER JOIN sys.dm_hadr_database_replica_cluster_states drcs  WITH(NOLOCK)
 							ON drs.replica_id = drcs.replica_id 
 							AND drs.group_database_id = drcs.group_database_id
-					LEFT OUTER JOIN primary_replicas pr 
+					LEFT OUTER JOIN primary_replicas pr  WITH(NOLOCK)
 							ON drs.group_id = pr.group_id 
 							AND drs.group_database_id = pr.group_database_id
 							)
 MERGE [data].[availability_group_properties] dest USING
 (SELECT * 
- FROM cte_availability_group_properties) src
+ FROM cte_availability_group_properties) src 
  ON src.[group_database_id] = dest.[group_database_id] AND src.[replica_id] = dest.[replica_id]
 
 		WHEN NOT MATCHED THEN 
@@ -390,6 +372,7 @@ BEGIN
 
 	DECLARE @ag_info TABLE (
 		[serverid] [uniqueidentifier] NOT NULL,
+		[collector_rowguid] [uniqueidentifier] NOT NULL,
 		[database_id] [int] NOT NULL,
 		[replica_id] [uniqueidentifier] NOT NULL,
 		[group_id] [uniqueidentifier] NOT NULL,
@@ -414,6 +397,7 @@ BEGIN
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
       OUTPUT @serverid serverid
+	  ,inserted.[collector_rowguid]
 	  ,inserted.[database_id]
       ,inserted.[replica_id]
       ,inserted.[group_id]
@@ -438,6 +422,7 @@ BEGIN
   WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
 
 	SELECT ai.[serverid]
+	    ,ai.[collector_rowguid]
 		,ai.[database_id]
 		,ai.[replica_id]
 		,ai.[group_id]
@@ -476,5 +461,5 @@ MERGE [internal].[collectors] dest
 		ON src.[collector] = dest.[collector]
 	WHEN NOT MATCHED THEN 
 		INSERT ([section], [collector], [cron], [lastrun], [is_enabled])
-		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01', 1);
+		VALUES (src.[section], src.[collector], src.[cron], '2000-01-01', 0);
 GO

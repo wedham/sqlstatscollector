@@ -43,6 +43,7 @@ BEGIN
 	SELECT @msg = N'Creating ' + @FullName
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[job_properties](
+		[collector_rowguid] [uniqueidentifier] NOT NULL CONSTRAINT [df_job_properties_rowguid] DEFAULT NEWID() ROWGUIDCOL,
 		[job_id] [uniqueidentifier] NOT NULL,
 		[job_name] [nvarchar](128) NOT NULL,
 		[description] [nvarchar](512) NOT NULL,
@@ -91,32 +92,13 @@ SELECT @FullName = [FullName]
      , @TableHasChanged = [TableHasChanged]
 FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
 
-IF @TableExists = 1 AND @TableHasChanged = 1
+IF @TableExists = 1 
 BEGIN
 	SELECT @cmd = N'DROP TABLE ' + @FullName
 	RAISERROR(@cmd, 10, 1) WITH NOWAIT
 	EXEC (@cmd)
-	SET @TableExists = 0
 END
 
-
-IF @TableExists = 0
-BEGIN
-	SELECT @msg = N'Creating ' + @FullName
-	RAISERROR(@msg, 10, 1) WITH NOWAIT
-	CREATE TABLE [data].[job_properties_changes](
-		[rowtimeutc] [datetime2](7) NOT NULL,
-		[job_id] [uniqueidentifier] NOT NULL,
-		[propertyname] [nvarchar](128) NOT NULL,
-		[old_value] [nvarchar](256) NOT NULL,
-		[new_value] [nvarchar](256) NOT NULL,
-	) ON [PRIMARY]
-END
-
-SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
-FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-
-RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
@@ -131,8 +113,8 @@ AFTER UPDATE
 AS
 BEGIN
 
-    INSERT INTO [data].[job_properties_changes] ([rowtimeutc], [job_id], [propertyname], [old_value], [new_value])
-    SELECT i.[LastUpdatedUTC], i.[job_id], changedata.propertyname, changedata.old_value, changedata.new_value
+    INSERT INTO [data].[collector_changes] ([rowtimeutc], [collector_rowguid], [collectorname] , [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[collector_rowguid], N'job_properties', changedata.propertyname, changedata.old_value, changedata.new_value
     FROM inserted i INNER JOIN deleted d ON i.[job_id] = d.[job_id] 
     CROSS APPLY ( VALUES 
     -- Insert a list of columns for change tracking here.
@@ -185,6 +167,7 @@ Date		Name				Description
 2024-01-23	Mikael Wedham		+Added errorhandling
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-06-03	Mikael Wedham		History functionality added
+2026-11-17	Mikael Wedham		NOLOCK hint added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[job_properties]
 AS
@@ -209,7 +192,7 @@ SET NOCOUNT ON
 					SELECT [rowselector] = ROW_NUMBER() OVER (PARTITION BY h.[job_id] ORDER BY h.[run_date] DESC, h.[run_time] DESC)
 					, h.[job_id]
 					, h.[run_duration]
-					FROM [dbo].[sysjobhistory] h
+					FROM [dbo].[sysjobhistory] h WITH(NOLOCK)
 					WHERE h.[step_id] = 0
 					), [jobdurations] AS
 					(
@@ -241,15 +224,15 @@ SET NOCOUNT ON
 			, last_startdate = CONVERT(DATETIME, RTRIM(h.[run_date]) + ' ' + STUFF(STUFF(REPLACE(STR(RTRIM(h.[run_time]),6,0),' ','0'),3,0,':'),6,0,':'))
 			, last_duration = h.[run_duration]
 			, run_duration_avg = d.[run_duration_avg]
-		FROM [dbo].[sysjobs] AS sj WITH (NOLOCK)
+		FROM [dbo].[sysjobs] sj WITH (NOLOCK)
 		INNER JOIN
 			(SELECT [job_id], instance_id = MAX([instance_id])
 			FROM [dbo].[sysjobhistory] WITH (NOLOCK)
-			GROUP BY [job_id]) AS l
+			GROUP BY [job_id]) l
 		ON sj.[job_id] = l.[job_id]
-		INNER JOIN [dbo].[syscategories] AS sc WITH (NOLOCK)
+		INNER JOIN [dbo].[syscategories] sc WITH (NOLOCK)
 		ON sj.[category_id] = sc.[category_id]
-		LEFT OUTER JOIN [dbo].[sysjobhistory] AS h WITH (NOLOCK)
+		LEFT OUTER JOIN [dbo].[sysjobhistory] h WITH (NOLOCK)
 		ON h.[job_id] = l.[job_id]
 		AND h.[instance_id] = l.[instance_id]
 		LEFT OUTER JOIN [jobdurations] d
@@ -355,6 +338,7 @@ BEGIN
 
 	DECLARE @job_properties TABLE (
 		[serverid] [uniqueidentifier] NOT NULL,
+		[collector_rowguid] [uniqueidentifier] NOT NULL,
 		[job_id] [uniqueidentifier] NOT NULL,
 		[job_name] [nvarchar](128) NOT NULL,
 		[description] [nvarchar](512) NOT NULL,
@@ -374,6 +358,7 @@ BEGIN
 	UPDATE s
 	SET [LastHandledUTC] = SYSUTCDATETIME()
 	OUTPUT @serverid serverid 
+	     , inserted.[collector_rowguid]
 	     , inserted.[job_id]
 		 , inserted.[job_name]
 		 , inserted.[description]
@@ -392,6 +377,7 @@ BEGIN
 	WHERE [LastHandledUTC] IS NULL OR [LastUpdatedUTC] > [LastHandledUTC]
 
 	SELECT jp.serverid 
+	     , jp.[collector_rowguid]
 	     , jp.[job_id]
 		 , jp.[job_name]
 		 , jp.[description]

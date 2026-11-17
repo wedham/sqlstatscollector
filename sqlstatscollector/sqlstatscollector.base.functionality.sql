@@ -309,6 +309,68 @@ FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinition
 RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
+
+
+
+
+----------------------------------------------------------------
+-- Table [data].[collector_changes]
+----------------------------------------------------------------
+RAISERROR(N'/****** Object:  Table [data].[collector_changes] ******/', 10, 1) WITH NOWAIT
+
+DECLARE @SchemaName nvarchar(128) = N'data'
+DECLARE @TableName nvarchar(128) = N'collector_changes'
+DECLARE @TableDefinitionHash varbinary(32) = 0xAB63456F0B74761AF10BC37282F05404C3C6491243DDDADBD71BCC20094DA37E
+
+DECLARE @TableExists int
+DECLARE @TableHasChanged int
+DECLARE @FullName nvarchar(255)
+DECLARE @NewName nvarchar(128)
+
+DECLARE @cmd nvarchar(2048)
+DECLARE @msg nvarchar(2048)
+
+SELECT @FullName = [FullName]
+     , @TableExists = [TableExists]
+     , @TableHasChanged = [TableHasChanged]
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+IF @TableExists = 1 AND @TableHasChanged = 1
+BEGIN
+	SELECT @cmd = N'DROP TABLE ' + @FullName
+	RAISERROR(@cmd, 10, 1) WITH NOWAIT
+	EXEC (@cmd)
+	SET @TableExists = 0
+END
+
+
+IF @TableExists = 0
+BEGIN
+	SELECT @msg = N'Creating ' + @FullName
+	RAISERROR(@msg, 10, 1) WITH NOWAIT
+	CREATE TABLE [data].[collector_changes](
+		[rowtimeutc] [datetime2](7) NOT NULL,
+		[collector_rowguid] [uniqueidentifier] NOT NULL,
+		[collectorname] [nvarchar](100) NOT NULL,
+		[propertyname] [nvarchar](128) NOT NULL,
+		[old_value] [nvarchar](MAX) NOT NULL,
+		[new_value] [nvarchar](MAX) NOT NULL,
+	) ON [PRIMARY]
+END
+
+SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
+FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
+
+RAISERROR(@msg, 10, 1) WITH NOWAIT
+GO
+
+
+
+
+
+
+
+
 RAISERROR(N'/****** Object:  StoredProcedure [internal].[collectors_for_transfer] ******/', 10, 1) WITH NOWAIT
 GO
 

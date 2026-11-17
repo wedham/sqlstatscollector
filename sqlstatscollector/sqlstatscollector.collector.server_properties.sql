@@ -43,6 +43,7 @@ BEGIN
 	SELECT @msg = N'Creating ' + @FullName
 	RAISERROR(@msg, 10, 1) WITH NOWAIT
 	CREATE TABLE [data].[server_properties](
+		[collector_rowguid] [uniqueidentifier] NOT NULL CONSTRAINT [df_server_properties_rowguid] DEFAULT NEWID() ROWGUIDCOL,
 		[serverid] [uniqueidentifier] NOT NULL,
 		[MachineName] [nvarchar](128) NOT NULL,
 		[ServerName] [nvarchar](128) NOT NULL,
@@ -139,8 +140,8 @@ AFTER UPDATE
 AS
 BEGIN
 
-    INSERT INTO [data].[server_properties_changes] ([rowtimeutc], [serverid], [propertyname], [old_value], [new_value])
-    SELECT i.[LastUpdatedUTC], i.[serverid], changedata.propertyname, changedata.old_value, changedata.new_value
+    INSERT INTO [data].[collector_changes] ([rowtimeutc], [collector_rowguid], [collectorname] , [propertyname], [old_value], [new_value])
+    SELECT i.[LastUpdatedUTC], i.[collector_rowguid], N'server_properties', changedata.propertyname, changedata.old_value, changedata.new_value
     FROM inserted i INNER JOIN deleted d ON i.[serverid] = d.[serverid] 
     CROSS APPLY ( VALUES 
     -- Insert a list of columns for change tracking here.
@@ -199,6 +200,7 @@ Date		Name				Description
 2026-03-31	Mikael Wedham		Adding UTC to column names
 2026-05-27	Mikael Wedham		Cores and memory added #29
 2026-06-02	Mikael Wedham		History functionality added
+2026-11-17	Mikael Wedham		NOLOCK hint added
 *******************************************************************************/
 ALTER PROCEDURE [collect].[server_properties]
 AS
@@ -250,7 +252,7 @@ SET NOCOUNT ON
                     , [cores_per_socket]
                     , [virtual_machine_type_desc]
 					, [sqlserver_start_time]
-                    FROM [sys].[dm_os_sys_info]
+                    FROM [sys].[dm_os_sys_info] WITH(NOLOCK)
 					) src
 		ON dest.[MachineName] = src.[MachineName]	
 		WHEN NOT MATCHED THEN
