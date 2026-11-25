@@ -130,7 +130,7 @@ BEGIN
     CROSS APPLY ( VALUES 
     -- Insert a list of columns for change tracking here.
 
-                  (N'[owner_sid]'                     , CAST(d.[owner_sid] AS nvarchar(256))                     , CAST(i.[owner_sid] AS nvarchar(256)))
+                  (N'[owner_sid]'                     , CONVERT(nvarchar(256), d.[owner_sid], 1)                 , CONVERT(nvarchar(256), i.[owner_sid], 1))
                  ,(N'[create_date]'                   , CONVERT(nvarchar(256), d.[create_date], 121)             , CONVERT(nvarchar(256), i.[create_date], 121))
                  ,(N'[compatibility_level]'           , CAST(d.[compatibility_level] AS nvarchar(256))           , CAST(i.[compatibility_level] AS nvarchar(256)))
                  ,(N'[collation_name]'                , CAST(d.[collation_name] AS nvarchar(256))                , CAST(i.[collation_name] AS nvarchar(256)))

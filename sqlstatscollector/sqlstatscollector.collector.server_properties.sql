@@ -107,25 +107,6 @@ BEGIN
 	EXEC (@cmd)
 	SET @TableExists = 0
 END
-
-
-IF @TableExists = 0
-BEGIN
-	SELECT @msg = N'Creating ' + @FullName
-	RAISERROR(@msg, 10, 1) WITH NOWAIT
-	CREATE TABLE [data].[server_properties_changes](
-		[rowtimeutc] [datetime2](7) NOT NULL,
-		[serverid] [uniqueidentifier] NOT NULL,
-		[propertyname] [nvarchar](128) NOT NULL,
-		[old_value] [nvarchar](256) NOT NULL,
-		[new_value] [nvarchar](256) NOT NULL,
-	) ON [PRIMARY]
-END
-
-SELECT @msg = N'Table:' + [FullName] + ' Checksum:' + CONVERT(nvarchar(100), [TableDefinitionHash], 1)
-FROM [internal].[TableMetadataChecker](@SchemaName, @TableName, @TableDefinitionHash)
-
-RAISERROR(@msg, 10, 1) WITH NOWAIT
 GO
 
 
